@@ -10,3 +10,11 @@ __pycache__/
 
 outputs/
 **/outputs/
+
+.DS_Store
+**/.DS_Store
+
+*.h5
+*.pt
+
+**/.tmp/
