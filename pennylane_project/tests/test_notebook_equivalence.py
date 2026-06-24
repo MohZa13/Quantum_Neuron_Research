@@ -113,7 +113,7 @@ class NotebookEquivalenceTests(unittest.TestCase):
             np.trace(vector_aggregates[0] + vector_aggregates[1]).real, 1.0, places=12
         )
 
-    def test_original_loss_matches_but_gradient_has_documented_temperature_factor(self):
+    def test_original_loss_and_gradient_match_vectorized_dense_reference(self):
         n, samples, temperature = 3, 12, 2.0
         vectors = random_state_vectors(self.rng, n, samples)
         states = densities(vectors)
@@ -128,9 +128,7 @@ class NotebookEquivalenceTests(unittest.TestCase):
             weights, states, labels, terms, temperature
         )
         self.assertAlmostEqual(original_loss, penny_loss, places=12)
-        np.testing.assert_allclose(
-            temperature * original_gradient, penny_gradient, atol=1e-10
-        )
+        np.testing.assert_allclose(original_gradient, penny_gradient, atol=1e-10)
 
     def test_optimized_gradient_matches_finite_difference(self):
         n, samples = 3, 10

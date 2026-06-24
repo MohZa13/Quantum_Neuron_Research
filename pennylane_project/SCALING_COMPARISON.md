@@ -51,20 +51,13 @@ All 12 automated tests pass. They verify:
 - Automatic n=11 matrix-free routing without any call to dense `eigh`.
 - CPU/GPU backend selection and missing-CuPy behavior.
 
-### Important original-gradient discrepancy
+### Original-gradient correction
 
-The two notebooks compute the same loss. The original notebook's `dfj`
-function, however, applies an extra division by `T` to every Hamiltonian basis
-term. At the notebook's `T=2`, its gradient is exactly one half of the
-finite-difference-validated gradient:
-
-```text
-correct_gradient = T * original_dfj_gradient
-```
-
-This changes the effective learning rate and therefore the training trajectory,
-although the intended stationary point is unchanged. Runtime comparisons still
-use the original code exactly as written.
+The original notebook's `dfj` helper has been corrected so the Hamiltonian basis
+derivative is `dH/dω_j = H_j`, not `H_j/T`. With this fix, the dense original
+gradient agrees directly with the finite-difference-validated PennyLane dense,
+aggregate, and symbolic paths. The loss was already the same; the correction
+removes the old temperature-scaled training-step discrepancy.
 
 ## Algorithmic comparison
 

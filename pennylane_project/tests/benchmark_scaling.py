@@ -121,7 +121,7 @@ def benchmark_case(original, penny, n, samples, sweep, include_original=True, re
             states.nbytes,
             dense_quantum_bytes,
             method_repeats=1,
-            notes="Gradient contains the original notebook's extra 1/T factor.",
+            notes="Corrected dense baseline; uses dense matrices and per-sample traces.",
         )
         record(
             "classical",
