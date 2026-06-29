@@ -167,6 +167,76 @@ python3 qh9_slater_data/build_qh9_slater.py \
   --max-samples 5000
 ```
 
+Build every eligible qubit-count group in one streaming pass:
+
+```bash
+python3 qh9_slater_data/build_qh9_slater.py \
+  --root ./qh9_data \
+  --scan-from qh9_slater_data/qh9_scan.jsonl \
+  --all-groups \
+  --out-dir qh9_slater_data/groups \
+  --out-prefix qh9_slater \
+  --max-qubits 400 \
+  --max-samples 0
+```
+
+This writes one appendable HDF5 file per fixed spin-orbital/qubit count:
+
+```text
+qh9_slater_data/groups/qh9_slater_256q.h5
+qh9_slater_data/groups/qh9_slater_302q.h5
+qh9_slater_data/groups/qh9_slater_352q.h5
+...
+```
+
+Split by both qubit count and electron count:
+
+```bash
+python3 qh9_slater_data/build_qh9_slater.py \
+  --root ./qh9_data \
+  --scan-from qh9_slater_data/qh9_scan.jsonl \
+  --all-groups \
+  --group-by-nelec \
+  --out-dir qh9_slater_data/groups_by_nelec \
+  --out-prefix qh9_slater \
+  --max-qubits 400 \
+  --max-samples 0
+```
+
+Run all-groups mode in resumable chunks:
+
+```bash
+python3 qh9_slater_data/build_qh9_slater.py \
+  --root ./qh9_data \
+  --scan-from qh9_slater_data/qh9_scan.jsonl \
+  --all-groups \
+  --out-dir qh9_slater_data/groups \
+  --out-prefix qh9_slater \
+  --max-qubits 400 \
+  --max-samples 0 \
+  --start-index 0 \
+  --stop-index 10000
+```
+
+Then continue later:
+
+```bash
+python3 qh9_slater_data/build_qh9_slater.py \
+  --root ./qh9_data \
+  --scan-from qh9_slater_data/qh9_scan.jsonl \
+  --all-groups \
+  --out-dir qh9_slater_data/groups \
+  --out-prefix qh9_slater \
+  --max-qubits 400 \
+  --max-samples 0 \
+  --start-index 10000 \
+  --stop-index 20000
+```
+
+Chunks append into the same files. Existing `original_index` values are skipped,
+so rerunning an overlapping chunk is safe. Binary labels are recomputed from the
+current accumulated file after each chunk.
+
 ## Key Arguments
 
 `--root`
@@ -176,6 +246,14 @@ QH9 dataset root directory.
 `--out`
 
 Output HDF5 path.  Parent directories are created automatically.
+
+`--out-dir`
+
+Output directory used by `--all-groups`.
+
+`--out-prefix`
+
+Filename prefix used by `--all-groups`.
 
 `--dataset`
 
@@ -214,6 +292,38 @@ sequential chunks.
 
 Streams a previously written JSONL scan file for group selection.  With
 `--scan-only`, this path avoids loading the QH9 dataset at all.
+
+`--max-samples`
+
+Maximum number of molecules to write for a single-group build.  In
+`--all-groups` mode, this is a per-group cap.  Use `--max-samples 0` for no cap.
+
+`--all-groups`
+
+Stream the dataset once and write one appendable HDF5 file per fixed qubit-count
+group.
+
+`--group-by-nelec`
+
+With `--all-groups`, split files by both qubit count and electron count.
+
+`--start-index`, `--stop-index`
+
+Chunk bounds for resumable `--all-groups` runs.
+
+`--min-group-samples`
+
+When `--all-groups` is combined with `--scan-from`, skip scan groups smaller
+than this count.
+
+`--flush-every`
+
+Flush open HDF5 files every N appended records in `--all-groups` mode.
+
+`--compression`
+
+Optional HDF5 compression for `--all-groups` outputs: `none`, `lzf`, or `gzip`.
+Compression can save disk but slows the build.
 
 ## HDF5 Outputs
 

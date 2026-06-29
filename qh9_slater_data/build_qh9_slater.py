@@ -756,6 +756,13 @@ def print_group_summary(group_counts, nelec_dist):
         print(f"{rank:2d} | {nao:3d} | {n_spin_orbitals:3d} | {count:6d} | {common_str}")
 
 
+def print_all_group_summary(group_counts, nelec_dist):
+    print("Target all-groups summary:")
+    print_group_summary(group_counts, nelec_dist)
+    print(f"  groups selected    = {len(group_counts)}")
+    print(f"  molecules selected = {sum(group_counts.values())}")
+
+
 def next_scan_dataset_index(scan_path):
     """Return the next dataset index for appending a sequential scan chunk."""
     if scan_path is None or not os.path.exists(scan_path) or os.path.getsize(scan_path) == 0:
@@ -838,6 +845,394 @@ def choose_group_from_scan_file(scan_path, max_qubits, basis=None, scan_limit=No
     print_group_summary(group_counts, nelec_dist)
     print_skip_summary(skipped)
     return group_counts.most_common(1)[0][0]
+
+
+def load_all_group_filter_from_scan(
+    scan_path,
+    max_qubits,
+    basis=None,
+    scan_limit=None,
+    target_nao=None,
+    target_nelec=None,
+    min_group_samples=1,
+):
+    """Load eligible molecule signatures from a scan JSONL file.
+
+    Returns a map keyed by original dataset index.  The caller can use this map
+    to skip non-target molecules without touching the raw DB row.
+    """
+    records = {}
+    group_counts = Counter()
+    nelec_dist = defaultdict(Counter)
+    skipped = Counter()
+    n_seen = 0
+
+    with open(scan_path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+
+            record = json.loads(line)
+            record_type = record.get("record_type")
+
+            if record_type in {"metadata", "scan_chunk"}:
+                scan_basis = record.get("basis")
+                if basis is not None and scan_basis is not None and scan_basis != basis:
+                    print(
+                        "Warning: scan file basis "
+                        f"{scan_basis!r} does not match current --basis {basis!r}."
+                    )
+                continue
+
+            if scan_limit is not None and n_seen >= scan_limit:
+                break
+            n_seen += 1
+
+            if record_type == "skip":
+                skipped[str(record.get("reason", "unknown"))] += 1
+                continue
+
+            if record_type != "signature":
+                continue
+
+            nao = int(record["nao"])
+            n_spin_orbitals = int(record["n_spin_orbitals"])
+            nelec = int(record["nelec"])
+            original_index = int(record.get("index", record.get("dataset_idx")))
+
+            if n_spin_orbitals > max_qubits:
+                continue
+            if target_nao is not None and nao != target_nao:
+                continue
+            if target_nelec is not None and nelec != target_nelec:
+                continue
+
+            key = (nao, n_spin_orbitals)
+            group_counts[key] += 1
+            nelec_dist[key][nelec] += 1
+            records[original_index] = {
+                "nao": nao,
+                "n_spin_orbitals": n_spin_orbitals,
+                "nelec": nelec,
+            }
+
+    if min_group_samples > 1:
+        allowed_groups = {
+            group for group, count in group_counts.items()
+            if count >= min_group_samples
+        }
+        records = {
+            index: record for index, record in records.items()
+            if (record["nao"], record["n_spin_orbitals"]) in allowed_groups
+        }
+        group_counts = Counter(
+            {
+                group: count for group, count in group_counts.items()
+                if group in allowed_groups
+            }
+        )
+        nelec_dist = defaultdict(
+            Counter,
+            {
+                group: nelec_dist[group] for group in allowed_groups
+            },
+        )
+
+    if not group_counts:
+        print_skip_summary(skipped)
+        raise RuntimeError(
+            f"No molecule group found in {scan_path} with n_spin_orbitals <= "
+            f"{max_qubits} after all filters."
+        )
+
+    print(f"Loaded all-groups scan filter from {scan_path}")
+    print_all_group_summary(group_counts, nelec_dist)
+    print_skip_summary(skipped)
+    return records, group_counts, nelec_dist
+
+
+def all_group_key_from_record(record, group_by_nelec=False):
+    key = (int(record["nao"]), int(record["n_spin_orbitals"]))
+    if group_by_nelec:
+        key = key + (int(record["nelec"]),)
+    return key
+
+
+def all_group_output_path(out_dir, out_prefix, key, group_by_nelec=False):
+    nao, n_spin_orbitals = int(key[0]), int(key[1])
+    if group_by_nelec:
+        nelec = int(key[2])
+        filename = f"{out_prefix}_{n_spin_orbitals}q_{nelec}e.h5"
+    else:
+        filename = f"{out_prefix}_{n_spin_orbitals}q.h5"
+    return os.path.join(out_dir, filename)
+
+
+def resize_1d_dataset(dataset, length):
+    dataset.resize((length,))
+
+
+def resize_2d_dataset(dataset, length):
+    dataset.resize((length, dataset.shape[1]))
+
+
+def resize_3d_dataset(dataset, length):
+    dataset.resize((length, dataset.shape[1], dataset.shape[2]))
+
+
+class AppendableSlaterH5:
+    """Append-only HDF5 writer for one fixed qubit-count group."""
+
+    def __init__(
+        self,
+        path,
+        *,
+        args,
+        target_nao,
+        target_n_spin_orbitals,
+        target_nelec,
+        loader_module,
+        resolved_split,
+        compression=None,
+    ):
+        self.path = path
+        self.args = args
+        self.target_nao = int(target_nao)
+        self.target_n_spin_orbitals = int(target_n_spin_orbitals)
+        self.target_nelec = target_nelec
+        self.compression = None if compression in {None, "none"} else compression
+        ensure_parent_dir(path)
+        exists = os.path.exists(path) and os.path.getsize(path) > 0
+        self.h5 = h5py.File(path, "a")
+
+        if exists and "W" in self.h5:
+            self._validate_existing()
+        else:
+            self._initialize(loader_module, resolved_split)
+
+        self.existing_indices = set(
+            int(index) for index in np.asarray(self.h5["original_index"][:], dtype=np.int64)
+        )
+
+    def _dataset_kwargs(self):
+        kwargs = {"chunks": True}
+        if self.compression is not None:
+            kwargs["compression"] = self.compression
+        return kwargs
+
+    def _initialize(self, loader_module, resolved_split):
+        h5 = self.h5
+        h5.attrs["basis"] = self.args.basis
+        h5.attrs["method"] = "QH9 generalized diagonalization"
+        h5.attrs["source"] = "QH9"
+        h5.attrs["hamiltonian_type"] = "DFT/Kohn-Sham Hamiltonian from QH9"
+        h5.attrs["scf_run"] = False
+        h5.attrs["dataset"] = self.args.dataset
+        h5.attrs["split"] = resolved_split
+        h5.attrs["subset"] = self.args.subset
+        h5.attrs["loader_module"] = loader_module
+        h5.attrs["target_nao"] = self.target_nao
+        h5.attrs["target_n_spin_orbitals"] = self.target_n_spin_orbitals
+        h5.attrs["target_nelec"] = (
+            "variable" if self.target_nelec is None else int(self.target_nelec)
+        )
+        h5.attrs["label_source"] = self.args.label_source
+        h5.attrs["gap_threshold_ev"] = np.nan
+        h5.attrs["spin_orbital_ordering"] = "alpha block first, beta block second"
+        h5.attrs["ham_ordering"] = self.args.ham_ordering
+        h5.attrs["basis_note"] = "basis must match QH9 Hamiltonian basis; default is def2-svp"
+        h5.attrs["W_padding"] = "columns after nelec[i] are zero padding"
+        h5.attrs["all_groups_mode"] = True
+        h5.attrs["n_records"] = 0
+
+        n_qubits = self.target_n_spin_orbitals
+        nao = self.target_nao
+        kwargs = self._dataset_kwargs()
+        string_dtype = h5py.string_dtype(encoding="utf-8")
+
+        h5.create_dataset(
+            "W", shape=(0, n_qubits, n_qubits),
+            maxshape=(None, n_qubits, n_qubits), dtype=np.complex128, **kwargs)
+        h5.create_dataset(
+            "D_occ", shape=(0, nao, nao),
+            maxshape=(None, nao, nao), dtype=np.complex128, **kwargs)
+        h5.create_dataset(
+            "orbital_energy_hartree", shape=(0, nao),
+            maxshape=(None, nao), dtype=float, **kwargs)
+        h5.create_dataset(
+            "mo_energy_hartree", shape=(0, nao),
+            maxshape=(None, nao), dtype=float, **kwargs)
+
+        for name, dtype in [
+            ("nelec", np.int64),
+            ("n_occ_spatial", np.int64),
+            ("y_gap_binary", np.int64),
+            ("gap_qh9_ev", float),
+            ("gap_qm9_ev", float),
+            ("homo_qh9_ev", float),
+            ("lumo_qh9_ev", float),
+            ("gap_hf_ev", float),
+            ("homo_hf_ev", float),
+            ("lumo_hf_ev", float),
+            ("hf_energy_hartree", float),
+            ("qh9_index", np.int64),
+            ("qm9_index", np.int64),
+            ("original_index", np.int64),
+        ]:
+            h5.create_dataset(name, shape=(0,), maxshape=(None,), dtype=dtype, **kwargs)
+
+        h5["gap_hf_ev"].attrs["compatibility_alias"] = (
+            "same as gap_qh9_ev; not Hartree-Fock"
+        )
+        h5["homo_hf_ev"].attrs["compatibility_alias"] = (
+            "same as homo_qh9_ev; not Hartree-Fock"
+        )
+        h5["lumo_hf_ev"].attrs["compatibility_alias"] = (
+            "same as lumo_qh9_ev; not Hartree-Fock"
+        )
+        h5["hf_energy_hartree"].attrs["unavailable"] = (
+            "No HF/SCF calculation is run in the QH9 workflow"
+        )
+        h5["mo_energy_hartree"].attrs["compatibility_alias"] = (
+            "same as orbital_energy_hartree; Kohn-Sham/QH9 eigenvalues, not HF"
+        )
+        h5["qm9_index"].attrs["compatibility_alias"] = "same as qh9_index/original_index"
+
+        h5.create_dataset("metadata_json", shape=(0,), maxshape=(None,), dtype=string_dtype)
+
+    def _validate_existing(self):
+        attrs = self.h5.attrs
+        if int(attrs["target_nao"]) != self.target_nao:
+            raise ValueError(
+                f"Existing file {self.path} has target_nao={attrs['target_nao']}, "
+                f"expected {self.target_nao}"
+            )
+        if int(attrs["target_n_spin_orbitals"]) != self.target_n_spin_orbitals:
+            raise ValueError(
+                f"Existing file {self.path} has target_n_spin_orbitals="
+                f"{attrs['target_n_spin_orbitals']}, expected {self.target_n_spin_orbitals}"
+            )
+        if str(attrs["label_source"]) != self.args.label_source:
+            raise ValueError(
+                f"Existing file {self.path} has label_source={attrs['label_source']}, "
+                f"expected {self.args.label_source}"
+            )
+
+    def __len__(self):
+        return int(self.h5["original_index"].shape[0])
+
+    def has_index(self, original_index):
+        return int(original_index) in self.existing_indices
+
+    def _resize_all(self, length):
+        for name in ["W", "D_occ"]:
+            resize_3d_dataset(self.h5[name], length)
+        for name in ["orbital_energy_hartree", "mo_energy_hartree"]:
+            resize_2d_dataset(self.h5[name], length)
+        for name in [
+            "nelec", "n_occ_spatial", "y_gap_binary", "gap_qh9_ev",
+            "gap_qm9_ev", "homo_qh9_ev", "lumo_qh9_ev", "gap_hf_ev",
+            "homo_hf_ev", "lumo_hf_ev", "hf_energy_hartree", "qh9_index",
+            "qm9_index", "original_index", "metadata_json",
+        ]:
+            resize_1d_dataset(self.h5[name], length)
+
+    def append(self, record):
+        original_index = int(record["original_index"])
+        if self.has_index(original_index):
+            return False
+
+        i = len(self)
+        self._resize_all(i + 1)
+
+        w = record["W"]
+        d_occ = record["D_occ"]
+        orbital_energy = record["orbital_energy_hartree"]
+        nelec_i = int(record["nelec"])
+        n_occ_i = int(record["n_occ_spatial"])
+
+        self.h5["W"][i, :, :] = 0
+        self.h5["W"][i, :, :nelec_i] = w
+        self.h5["D_occ"][i, :, :] = 0
+        self.h5["D_occ"][i, :, :n_occ_i] = d_occ
+        self.h5["orbital_energy_hartree"][i, :] = np.nan
+        self.h5["orbital_energy_hartree"][i, : orbital_energy.shape[0]] = orbital_energy
+        self.h5["mo_energy_hartree"][i, :] = self.h5["orbital_energy_hartree"][i, :]
+
+        gap_qh9 = float(record["gap_qh9_ev"])
+        gap_qm9 = float(record["gap_qm9_ev"])
+        homo_qh9 = float(record["homo_qh9_ev"])
+        lumo_qh9 = float(record["lumo_qh9_ev"])
+
+        self.h5["nelec"][i] = nelec_i
+        self.h5["n_occ_spatial"][i] = n_occ_i
+        self.h5["y_gap_binary"][i] = -1
+        self.h5["gap_qh9_ev"][i] = gap_qh9
+        self.h5["gap_qm9_ev"][i] = gap_qm9
+        self.h5["homo_qh9_ev"][i] = homo_qh9
+        self.h5["lumo_qh9_ev"][i] = lumo_qh9
+        self.h5["gap_hf_ev"][i] = gap_qh9
+        self.h5["homo_hf_ev"][i] = homo_qh9
+        self.h5["lumo_hf_ev"][i] = lumo_qh9
+        self.h5["hf_energy_hartree"][i] = np.nan
+        self.h5["qh9_index"][i] = int(record["qh9_index"])
+        self.h5["qm9_index"][i] = int(record["qh9_index"])
+        self.h5["original_index"][i] = original_index
+
+        self.h5["metadata_json"][i] = json.dumps(
+            {
+                "original_index": record["original_index"],
+                "qh9_index": record["qh9_index"],
+                "atomic_numbers": record["atomic_numbers"],
+                "positions_angstrom": record["positions_angstrom"],
+                "nao": record["nao"],
+                "n_spin_orbitals": record["n_spin_orbitals"],
+                "nelec": record["nelec"],
+                "n_occ_spatial": record["n_occ_spatial"],
+                "gap_qh9_ev": record["gap_qh9_ev"],
+                "homo_qh9_ev": record["homo_qh9_ev"],
+                "lumo_qh9_ev": record["lumo_qh9_ev"],
+            }
+        )
+
+        self.existing_indices.add(original_index)
+        self.h5.attrs["n_records"] = i + 1
+        return True
+
+    def finalize_labels(self):
+        n_records = len(self)
+        if n_records == 0:
+            self.h5.attrs["gap_threshold_ev"] = np.nan
+            self.h5.attrs["positive_labels"] = 0
+            self.h5.attrs["negative_labels"] = 0
+            return None
+
+        if self.args.label_source == "qh9":
+            gaps = np.asarray(self.h5["gap_qh9_ev"][:], dtype=float)
+        elif self.args.label_source == "qm9":
+            gaps = np.asarray(self.h5["gap_qm9_ev"][:], dtype=float)
+            if not np.all(np.isfinite(gaps)):
+                raise RuntimeError(
+                    f"{self.path}: --label-source qm9 requested, but at least "
+                    "one QM9 gap is unavailable"
+                )
+        else:
+            raise ValueError(f"Unknown label source: {self.args.label_source}")
+
+        threshold = float(np.median(gaps))
+        labels = (gaps >= threshold).astype(np.int64)
+        self.h5["y_gap_binary"][:] = labels
+        self.h5.attrs["gap_threshold_ev"] = threshold
+        self.h5.attrs["positive_labels"] = int(labels.sum())
+        self.h5.attrs["negative_labels"] = int(labels.shape[0] - labels.sum())
+        self.h5.attrs["n_records"] = n_records
+        return threshold
+
+    def flush(self):
+        self.h5.flush()
+
+    def close(self):
+        self.h5.close()
 
 
 def choose_group(dataset, basis, max_qubits, scan_limit=None, scan_out=None):
@@ -975,11 +1370,232 @@ def source_index_for(dataset, idx):
     return int(idx)
 
 
+def run_all_groups(args):
+    """Build separate Slater HDF5 files for every eligible qubit-count group."""
+    dataset, loader_module, resolved_split = load_qh9_dataset(args)
+
+    print("Loaded QH9 dataset:")
+    print(f"  loader module      = {loader_module}")
+    print(f"  dataset            = {args.dataset}")
+    print(f"  split              = {resolved_split}")
+    print(f"  subset             = {args.subset}")
+    print(f"  samples            = {len(dataset)}")
+    print(f"  basis              = {args.basis}")
+    print(f"  ham_ordering       = {args.ham_ordering}")
+    print("  mode               = all-groups")
+
+    if args.max_samples < 0:
+        raise ValueError("--max-samples must be non-negative; use 0 for no per-group cap")
+    per_group_limit = None if args.max_samples == 0 else int(args.max_samples)
+
+    scan_filter = None
+    if args.scan_from is not None:
+        scan_filter, _, _ = load_all_group_filter_from_scan(
+            scan_path=args.scan_from,
+            max_qubits=args.max_qubits,
+            basis=args.basis,
+            scan_limit=args.scan_limit,
+            target_nao=args.target_nao,
+            target_nelec=args.target_nelec,
+            min_group_samples=args.min_group_samples,
+        )
+    else:
+        print(
+            "No --scan-from provided. The all-groups run will inspect molecule "
+            "sizes directly while streaming the DB."
+        )
+
+    start_index = 0 if args.start_index is None else int(args.start_index)
+    stop_index = len(dataset) if args.stop_index is None else min(int(args.stop_index), len(dataset))
+    if start_index < 0 or stop_index < start_index:
+        raise ValueError(f"Invalid chunk bounds: start={start_index}, stop={stop_index}")
+
+    os.makedirs(args.out_dir, exist_ok=True)
+
+    writers = {}
+    skipped = Counter()
+    appended_by_group = Counter()
+    duplicate_count = 0
+    capped_count = 0
+    candidate_count = 0
+    attempted_count = 0
+
+    def get_writer(key):
+        if key in writers:
+            return writers[key]
+
+        target_nao = int(key[0])
+        target_n_spin_orbitals = int(key[1])
+        target_nelec = int(key[2]) if args.group_by_nelec else None
+        path = all_group_output_path(
+            args.out_dir, args.out_prefix, key,
+            group_by_nelec=args.group_by_nelec)
+        writer = AppendableSlaterH5(
+            path,
+            args=args,
+            target_nao=target_nao,
+            target_n_spin_orbitals=target_n_spin_orbitals,
+            target_nelec=target_nelec,
+            loader_module=loader_module,
+            resolved_split=resolved_split,
+            compression=args.compression,
+        )
+        writers[key] = writer
+        return writer
+
+    try:
+        for idx in tqdm(
+            range(start_index, stop_index),
+            desc="Building all QH9 Slater groups",
+        ):
+            original_index = source_index_for(dataset, idx)
+
+            if scan_filter is not None:
+                scan_record = scan_filter.get(original_index)
+                if scan_record is None:
+                    continue
+
+                scan_key = all_group_key_from_record(
+                    scan_record, group_by_nelec=args.group_by_nelec)
+                writer = get_writer(scan_key)
+                if per_group_limit is not None and len(writer) >= per_group_limit:
+                    capped_count += 1
+                    continue
+                if writer.has_index(original_index):
+                    duplicate_count += 1
+                    continue
+            else:
+                scan_record = None
+                writer = None
+
+            candidate_count += 1
+
+            try:
+                data = get_dataset_sample(dataset, idx)
+            except Exception as exc:
+                skipped[skip_reason(exc)] += 1
+                continue
+
+            if scan_record is None:
+                try:
+                    sig = molecule_signature(data, args.basis)
+                except Exception as exc:
+                    skipped[skip_reason(exc)] += 1
+                    continue
+
+                if sig is None:
+                    skipped["odd electron count"] += 1
+                    continue
+
+                nao, n_spin_orbitals, nelec = sig
+                if n_spin_orbitals > args.max_qubits:
+                    continue
+                if args.target_nao is not None and nao != args.target_nao:
+                    continue
+                if args.target_nelec is not None and nelec != args.target_nelec:
+                    continue
+
+                key_record = {
+                    "nao": nao,
+                    "n_spin_orbitals": n_spin_orbitals,
+                    "nelec": nelec,
+                }
+                key = all_group_key_from_record(
+                    key_record, group_by_nelec=args.group_by_nelec)
+                writer = get_writer(key)
+                if per_group_limit is not None and len(writer) >= per_group_limit:
+                    capped_count += 1
+                    continue
+                if writer.has_index(original_index):
+                    duplicate_count += 1
+                    continue
+
+            attempted_count += 1
+
+            try:
+                result = diagonalize_hamiltonian_and_build_W(
+                    data,
+                    args.basis,
+                    ordering=args.ham_ordering,
+                    label_source=args.label_source,
+                )
+            except Exception as exc:
+                skipped[skip_reason(exc)] += 1
+                continue
+
+            if result["n_spin_orbitals"] > args.max_qubits:
+                continue
+            if args.target_nao is not None and result["nao"] != args.target_nao:
+                continue
+            if args.target_nelec is not None and result["nelec"] != args.target_nelec:
+                continue
+
+            key = all_group_key_from_record(
+                result, group_by_nelec=args.group_by_nelec)
+            writer = get_writer(key)
+            if per_group_limit is not None and len(writer) >= per_group_limit:
+                capped_count += 1
+                continue
+            if writer.has_index(original_index):
+                duplicate_count += 1
+                continue
+
+            result["original_index"] = original_index
+            result["qh9_index"] = original_index
+            if writer.append(result):
+                appended_by_group[key] += 1
+                total_appended = sum(appended_by_group.values())
+                if args.flush_every and total_appended % args.flush_every == 0:
+                    for open_writer in writers.values():
+                        open_writer.flush()
+
+    finally:
+        print()
+        print("Finalizing all-groups HDF5 files...")
+        for writer in writers.values():
+            writer.finalize_labels()
+            writer.flush()
+            writer.close()
+
+    print_skip_summary(skipped)
+    print()
+    print("All-groups build summary:")
+    print(f"  chunk start/stop       = {start_index}:{stop_index}")
+    print(f"  candidates             = {candidate_count}")
+    print(f"  diagonalization tries  = {attempted_count}")
+    print(f"  appended records       = {sum(appended_by_group.values())}")
+    print(f"  duplicate skips        = {duplicate_count}")
+    print(f"  per-group cap skips    = {capped_count}")
+    print(f"  output directory       = {args.out_dir}")
+
+    if appended_by_group:
+        print("  appended by group:")
+        for key, count in appended_by_group.most_common(20):
+            path = all_group_output_path(
+                args.out_dir, args.out_prefix, key,
+                group_by_nelec=args.group_by_nelec)
+            print(f"    {key}: +{count} -> {path}")
+    else:
+        print("  no new records appended")
+
+
 def build_arg_parser():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--root", type=str, default="./qh9_data")
     parser.add_argument("--out", type=str, default="qh9_slater_data/qh9_slater_weights.h5")
+    parser.add_argument(
+        "--out-dir",
+        type=str,
+        default="qh9_slater_data/groups",
+        help="Output directory used by --all-groups.",
+    )
+    parser.add_argument(
+        "--out-prefix",
+        type=str,
+        default="qh9_slater",
+        help="Output filename prefix used by --all-groups.",
+    )
     parser.add_argument(
         "--basis",
         type=str,
@@ -1014,6 +1630,36 @@ def build_arg_parser():
     parser.add_argument("--target-nelec", type=int, default=None)
 
     parser.add_argument("--max-samples", type=int, default=1000)
+    parser.add_argument(
+        "--min-group-samples",
+        type=int,
+        default=1,
+        help="With --all-groups and --scan-from, skip groups with fewer scan entries.",
+    )
+    parser.add_argument(
+        "--start-index",
+        type=int,
+        default=None,
+        help="Start dataset index for chunked --all-groups runs.",
+    )
+    parser.add_argument(
+        "--stop-index",
+        type=int,
+        default=None,
+        help="Exclusive stop dataset index for chunked --all-groups runs.",
+    )
+    parser.add_argument(
+        "--flush-every",
+        type=int,
+        default=50,
+        help="Flush open HDF5 files every N appended records in --all-groups mode.",
+    )
+    parser.add_argument(
+        "--compression",
+        choices=["none", "lzf", "gzip"],
+        default="none",
+        help="Optional HDF5 compression for --all-groups output datasets.",
+    )
     parser.add_argument("--scan-limit", type=int, default=None)
     parser.add_argument(
         "--scan-out",
@@ -1045,6 +1691,19 @@ def build_arg_parser():
         action="store_true",
         help="Only scan QH9 for group counts and exit without building Slater determinants.",
     )
+    parser.add_argument(
+        "--all-groups",
+        action="store_true",
+        help=(
+            "Stream QH9 once and write one appendable HDF5 file per fixed "
+            "qubit-count group. Use --max-samples 0 for no per-group cap."
+        ),
+    )
+    parser.add_argument(
+        "--group-by-nelec",
+        action="store_true",
+        help="With --all-groups, split files by both qubit count and electron count.",
+    )
 
     return parser
 
@@ -1059,6 +1718,12 @@ def main():
             "diagonalization. Use --ham-ordering pyscf only when Ham already matches "
             "PySCF def2-SVP AO ordering."
         )
+
+    if args.all_groups:
+        if args.scan_only:
+            raise ValueError("--all-groups cannot be combined with --scan-only")
+        run_all_groups(args)
+        sys.exit(0)
 
     if args.scan_only and args.scan_from is not None:
         chosen = choose_group_from_scan_file(
