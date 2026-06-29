@@ -16,5 +16,6 @@ outputs/
 
 *.h5
 *.pt
+*.db
 
 **/.tmp/
