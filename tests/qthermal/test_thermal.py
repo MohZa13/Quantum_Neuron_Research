@@ -15,6 +15,7 @@ from qthermal.thermal import (
     leading_determinant_weight,
     natural_occupations,
     resolve_kT_list,
+    resolve_keep_cap,
     static_correlation_score,
     thermal_rdm1,
     trace_distance_projected,
@@ -55,6 +56,15 @@ def test_truncate_prefix_cap_binds():
                                          cap=10)
     assert capped and m == 10
     assert tail > 1e-6                    # cap forced a larger discarded tail
+
+
+def test_resolve_keep_cap():
+    assert resolve_keep_cap(None, 4900) == 1225   # dim // 4
+    assert resolve_keep_cap(None, 400) == 1024    # the floor wins at small dim
+    assert resolve_keep_cap(0, 4900) is None      # uncapped
+    assert resolve_keep_cap(7, 4900) == 7
+    with pytest.raises(ValueError):
+        resolve_keep_cap(-1, 400)
 
 
 def test_ensemble_entropy_limits():
@@ -104,7 +114,7 @@ def h2o_solved(h2o_record):
     solver = DenseEDSolver()
     ens = solver.solve(ham.h1eff, ham.g, aspace, kT_max=KT_MAX,
                        weight_cutoff=CUTOFF)
-    ens_g = gaussian_reference_ensemble(ham.h1eff, aspace, solver,
+    ens_g = gaussian_reference_ensemble(ham.h1eff, aspace,
                                         kT_max=KT_MAX, weight_cutoff=CUTOFF)
     return aspace, ham, ens, ens_g
 
@@ -149,6 +159,20 @@ def test_kT_monotonicity(h2o_solved):
     assert sizes == sorted(sizes)
 
 
+def test_thermal_block_keep_cap(h2o_solved):
+    """keep_cap plumbing: a small cap binds the per-kT block, 0 lifts it."""
+    aspace, ham, ens, ens_g = h2o_solved
+    capped = build_thermal_block(ens, ens_g, KT_MAX, aspace,
+                                 weight_cutoff=CUTOFF, keep_cap=2)
+    assert capped.cap_hit and capped.civecs.shape == (2, aspace.dim)
+    assert capped.truncation_error > CUTOFF
+
+    uncapped = build_thermal_block(ens, ens_g, KT_MAX, aspace,
+                                   weight_cutoff=CUTOFF, keep_cap=0)
+    assert not uncapped.cap_hit
+    assert uncapped.truncation_error <= CUTOFF * 1.001
+
+
 def test_kT_above_kT_max_clamps(h2o_solved, caplog):
     """Asking for kT > kT_max cannot crash; it clamps to the kept states and
     reports the honest (larger) truncation error."""
@@ -161,6 +185,38 @@ def test_kT_above_kT_max_clamps(h2o_solved, caplog):
                               weight_cutoff=CUTOFF)
     assert len(blk.E) <= len(ens_small.E)
     assert blk.truncation_error > CUTOFF
+
+
+@pytest.fixture(scope="module")
+def h2o_gaussian_comparison(h2o_solved):
+    """Old (DenseEDSolver-based) vs new (closed-form) Gaussian reference for
+    the same interacting ensemble -- the end-to-end correctness gate for the
+    2026-07-20 optimization: gaussian_reference_ensemble now always uses
+    NonInteractingSolver, and every ThermalBlock field it feeds into must be
+    unchanged, not just approximately similar."""
+    aspace, ham, ens, ens_g_new = h2o_solved
+    ens_g_old = DenseEDSolver().solve(ham.h1eff, None, aspace, kT_max=KT_MAX,
+                                      weight_cutoff=CUTOFF)
+    return aspace, ham, ens, ens_g_new, ens_g_old
+
+
+@pytest.mark.parametrize("kT", [0.05, 0.10, 0.25])
+def test_gaussian_shortcut_matches_dense_reference(h2o_gaussian_comparison, kT):
+    aspace, ham, ens, ens_g_new, ens_g_old = h2o_gaussian_comparison
+    blk_new = build_thermal_block(ens, ens_g_new, kT, aspace, weight_cutoff=CUTOFF)
+    blk_old = build_thermal_block(ens, ens_g_old, kT, aspace, weight_cutoff=CUTOFF)
+
+    np.testing.assert_allclose(blk_new.E, blk_old.E, atol=1e-9)
+    np.testing.assert_allclose(blk_new.p, blk_old.p, atol=1e-9)
+    np.testing.assert_allclose(blk_new.civecs, blk_old.civecs, atol=1e-9)
+    np.testing.assert_allclose(blk_new.nat_occs, blk_old.nat_occs, atol=1e-9)
+    assert blk_new.cap_hit == blk_old.cap_hit
+    assert abs(blk_new.truncation_error - blk_old.truncation_error) < 1e-9
+    assert abs(blk_new.entropy - blk_old.entropy) < 1e-9
+    assert abs(blk_new.static_corr - blk_old.static_corr) < 1e-9
+    assert abs(blk_new.c_max_sq - blk_old.c_max_sq) < 1e-9
+    assert abs(blk_new.tracedist_gaussian - blk_old.tracedist_gaussian) < 1e-8
+    assert abs(blk_new.tracedist_bound - blk_old.tracedist_bound) < 1e-9
 
 
 def test_thermal_rdm1_ground_state_only(h2o_solved):

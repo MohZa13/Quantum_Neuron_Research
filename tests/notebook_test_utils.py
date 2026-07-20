@@ -11,9 +11,9 @@ from pathlib import Path
 import numpy as np
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ORIGINAL_NOTEBOOK = REPO_ROOT / "logloss_nqubits.ipynb"
-PENNYLANE_NOTEBOOK = REPO_ROOT / "pennylane_project" / "logloss_nqubits_pennylane.ipynb"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+ORIGINAL_NOTEBOOK = REPO_ROOT / "notebooks" / "paper" / "logloss.ipynb"
+PENNYLANE_NOTEBOOK = REPO_ROOT / "notebooks" / "pennylane" / "logloss_pennylane.ipynb"
 
 
 def load_notebook_namespace(path: Path, cell_indices: tuple[int, ...]) -> dict:
@@ -32,7 +32,7 @@ def load_notebook_namespace(path: Path, cell_indices: tuple[int, ...]) -> dict:
 
 def load_original_namespace() -> dict:
     """Load definitions without executing the original 750-epoch run."""
-    return load_notebook_namespace(ORIGINAL_NOTEBOOK, (1, 2, 3, 4))
+    return load_notebook_namespace(ORIGINAL_NOTEBOOK, (0, 1, 2, 3))
 
 
 def load_pennylane_namespace() -> dict:

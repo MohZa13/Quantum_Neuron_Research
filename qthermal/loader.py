@@ -4,12 +4,20 @@ Provides the :class:`MoleculeRecord` dataclass every downstream module consumes,
 an adapter that streams records from the raw ``QH9Stable.db`` SQLite file, and
 an empirical coordinate-unit detector (Angstrom vs Bohr must never be assumed).
 
-The SQLite schema and the QH9→PySCF AO reordering convention are taken from
-this repository's existing loader (``data/build_slater.py``,
-``RawQH9SQLiteDataset`` / ``PYSCF_DEF2SVP_CONVENTION``): table
-``data(id, N, Z, pos, Ham)`` with ``Z`` an int32 blob, ``pos`` a float64
-``(N, 3)`` blob, and ``Ham`` a float64 ``(nao, nao)`` blob in QH9's native AO
-ordering.
+The SQLite schema follows ``data/build_slater.py`` (``RawQH9SQLiteDataset``):
+table ``data(id, N, Z, pos, Ham)`` with ``Z`` an int32 blob, ``pos`` a float64
+``(N, 3)`` blob, and ``Ham`` a float64 ``(nao, nao)`` blob.
+
+AO ordering (empirical, 2026-07-09): the raw ``QH9Stable.db`` ``Ham`` blobs
+are **already in PySCF def2-SVP AO ordering** — no reordering is applied here.
+Validated against fresh B3LYP/def2-SVP spectra on records 0-4: raw blobs agree
+to <= 3.7e-3 Ha across the full spectrum (B3LYP-variant-level), while applying
+the QHBench ``PYSCF_DEF2SVP_CONVENTION`` reorder (as ``data/build_slater.py``
+line ~145 does) corrupts the matrices — ~1 Ha spurious core shifts on compact
+molecules that still slip through the physicality windows, and catastrophic
+intruder eigenvalues on linear molecules (HCN -57.7 Ha, C2H2 -173.7 Ha). The
+transform helpers below are kept only for QHBench *processed/model-output*
+matrices, which do use the native QH9 ordering.
 """
 
 from __future__ import annotations
@@ -63,6 +71,8 @@ class MoleculeRecord:
 # --- QH9 -> PySCF AO reordering (def2-SVP) ---------------------------------
 # Copied from data/build_slater.py (PYSCF_DEF2SVP_CONVENTION); kept here so the
 # qthermal package stays self-contained and import-side-effect free.
+# NOT applied to raw QH9Stable.db blobs (already PySCF-ordered — see module
+# docstring); use these only for QHBench processed/model-output matrices.
 _ATOM_TO_ORBITALS = {1: "ssp", 6: "sssppd", 7: "sssppd", 8: "sssppd", 9: "sssppd"}
 _ORBITAL_IDX_MAP = {"s": [0], "p": [1, 2, 0], "d": [0, 1, 2, 3, 4]}
 _ORBITAL_SIGN_MAP = {"s": [1], "p": [1, 1, 1], "d": [1, 1, 1, 1, 1]}
@@ -137,8 +147,10 @@ def _record_from_row(row) -> MoleculeRecord:
     Z = np.frombuffer(atoms_blob, dtype=np.int32).astype(np.int64)
     R = np.frombuffer(pos_blob, dtype=np.float64).reshape(int(num_nodes), 3)
     nao = int(sum(qh9_def2svp_ao_count(z) for z in Z))
-    ham = np.frombuffer(ham_blob, dtype=np.float64).reshape(nao, nao)
-    F = qh9_ham_to_pyscf(ham, Z)
+    # Raw QH9Stable.db Hamiltonians are already PySCF-ordered (see module
+    # docstring) — reordering here would corrupt them.
+    F = np.ascontiguousarray(
+        np.frombuffer(ham_blob, dtype=np.float64).reshape(nao, nao))
     return MoleculeRecord(idx=int(idx), Z=Z, R=R.copy(), F=F, C=None, eps=None)
 
 

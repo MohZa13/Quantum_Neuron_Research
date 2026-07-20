@@ -12,6 +12,14 @@ W.  No Hartree-Fock or SCF calculation is run here.
 Important: the QH9 Hamiltonian and the PySCF overlap matrix must use the same
 AO ordering and basis.  The default basis is def2-svp because QH9 Hamiltonians
 are provided in that basis.
+
+AO-ordering note (2026-07-10 audit): raw ``QH9Stable.db`` Ham blobs are
+ALREADY in PySCF def2-SVP AO ordering.  Until the audit, the raw-SQLite path
+re-applied the QHBench qh9->pyscf transform on top, double-transforming every
+record (median |HOMO| error 0.74 eV, max 3.8 eV; every data/groups/*.h5 built
+before the fix is corrupted).  See data/qh9_raw_sqlite_audit.md and
+qthermal/README.md "Deviations" item 6.  The transform helper is kept only
+for QHBench processed/model-output matrices, which do use native QH9 order.
 """
 
 import argparse
@@ -141,8 +149,10 @@ class RawQH9SQLiteDataset:
         pos = np.frombuffer(pos_blob, dtype=np.float64).reshape(int(num_nodes), 3) / pos_scale
         ham_flat = np.frombuffer(ham_blob, dtype=np.float64)
         num_orbitals = int(sum(qh9_def2svp_ao_count(atom) for atom in atoms))
-        ham = ham_flat.reshape(num_orbitals, num_orbitals)
-        ham = transform_qh9_hamiltonian_to_pyscf_order(ham, atoms)
+        # Raw QH9Stable.db Ham blobs are already PySCF-ordered; applying the
+        # QHBench transform here double-transformed every record (see module
+        # docstring / data/qh9_raw_sqlite_audit.md).
+        ham = np.ascontiguousarray(ham_flat.reshape(num_orbitals, num_orbitals))
 
         return SimpleNamespace(atoms=atoms, pos=pos, Ham=ham)
 
@@ -184,7 +194,12 @@ def qh9_def2svp_ao_count(atomic_number):
 
 
 def transform_qh9_hamiltonian_to_pyscf_order(matrix, atoms):
-    """Transform raw QH9 def2-SVP Hamiltonians to PySCF AO ordering."""
+    """Transform native-QH9-ordered def2-SVP matrices to PySCF AO ordering.
+
+    Applies to QHBench *processed/model-output* matrices only. Do NOT apply
+    to raw ``QH9Stable.db`` blobs — those are already PySCF-ordered, and
+    transforming them corrupts the spectra (data/qh9_raw_sqlite_audit.md).
+    """
     orbitals = ""
     orbitals_order = []
 

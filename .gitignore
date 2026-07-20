@@ -19,3 +19,6 @@ outputs/
 *.db
 
 **/.tmp/
+
+.pytest_cache/
+**/.pytest_cache/

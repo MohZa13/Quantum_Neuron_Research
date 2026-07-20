@@ -58,6 +58,22 @@ def truncate_prefix(evals: np.ndarray, kT: float, weight_cutoff: float,
     return m, p, tail, capped
 
 
+def resolve_keep_cap(keep_cap: int | None, dim: int) -> int | None:
+    """Effective cap on stored eigenvectors (per ensemble and per kT block).
+
+    ``None`` -> the default ``max(1024, dim // 4)`` storage heuristic;
+    ``0`` -> uncapped (the weight cutoff alone decides, up to the full
+    sector — mind the m x dim float64 storage); ``N > 0`` -> exactly N.
+    """
+    if keep_cap is None:
+        return max(1024, dim // 4)
+    if keep_cap < 0:
+        raise ValueError(f"keep_cap must be >= 0, got {keep_cap}")
+    if keep_cap == 0:
+        return None
+    return int(keep_cap)
+
+
 @dataclass
 class ThermalBlock:
     """Everything stored per (molecule, kT): the truncated ensemble plus the
@@ -134,11 +150,23 @@ def trace_distance_projected(vecs1: np.ndarray, p1: np.ndarray,
 
 
 def gaussian_reference_ensemble(h1eff: np.ndarray, aspace: ActiveSpace,
-                                solver, kT_max: float,
-                                weight_cutoff: float = DEFAULT_WEIGHT_CUTOFF):
-    """Solve the g = 0 (non-interacting) sector through the same solver seam."""
-    return solver.solve(h1eff, None, aspace, kT_max=kT_max,
-                        weight_cutoff=weight_cutoff)
+                                kT_max: float,
+                                weight_cutoff: float = DEFAULT_WEIGHT_CUTOFF,
+                                keep_cap: int | None = None):
+    """Solve the g = 0 (non-interacting) sector via the closed-form solver.
+
+    Always uses ``qthermal.diagonalize.NonInteractingSolver``, independent of
+    whichever backend solves the interacting problem: the non-interacting
+    spectrum has closed form, so this is always exact and never performs a
+    dim x dim diagonalization (verified against the previous
+    ``solver.solve(h1eff, None, ...)`` path to float64 noise — see
+    NonInteractingSolver's docstring). Local import: diagonalize.py already
+    imports resolve_keep_cap/truncate_prefix from this module, so a top-level
+    import here would be circular.
+    """
+    from qthermal.diagonalize import NonInteractingSolver
+    return NonInteractingSolver(keep_cap=keep_cap).solve(
+        h1eff, None, aspace, kT_max=kT_max, weight_cutoff=weight_cutoff)
 
 
 def _weights_for_kT(ensemble, kT: float, weight_cutoff: float,
@@ -166,10 +194,14 @@ def _weights_for_kT(ensemble, kT: float, weight_cutoff: float,
 
 def build_thermal_block(ensemble, gaussian_ensemble, kT: float,
                         aspace: ActiveSpace,
-                        weight_cutoff: float = DEFAULT_WEIGHT_CUTOFF) -> ThermalBlock:
+                        weight_cutoff: float = DEFAULT_WEIGHT_CUTOFF,
+                        keep_cap: int | None = None) -> ThermalBlock:
     """Assemble the per-(molecule, kT) dataset entry: truncated ensemble,
-    diagnostics, and the Gaussian-reference trace-distance audit."""
-    cap = max(1024, aspace.dim // 4)
+    diagnostics, and the Gaussian-reference trace-distance audit.
+
+    ``keep_cap`` follows :func:`resolve_keep_cap` semantics and must match the
+    solver's, or the block is silently re-capped to what the ensemble kept."""
+    cap = resolve_keep_cap(keep_cap, aspace.dim)
 
     m, p, tail, capped = _weights_for_kT(ensemble, kT, weight_cutoff, cap)
     E, vecs = ensemble.E[:m], ensemble.vecs[:m]

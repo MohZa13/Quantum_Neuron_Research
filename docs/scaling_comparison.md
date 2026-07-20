@@ -2,8 +2,8 @@
 
 ## Scope and reproducibility
 
-This report compares `logloss_nqubits.ipynb` with
-`pennylane_project/logloss_nqubits_pennylane.ipynb`. Both train a quantum
+This report compares `notebooks/paper/logloss.ipynb` with
+`notebooks/pennylane/logloss_pennylane.ipynb`. Both train a quantum
 Heisenberg classifier and a classical fully connected Ising model (FCIM) using
 the matrix logistic loss. The comparison covers correctness, one-pass runtime,
 one-time setup, static representation memory, training-sample scaling, and
@@ -13,14 +13,14 @@ Run the correctness suite:
 
 ```bash
 MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m unittest \
-  discover -s pennylane_project/tests -v
+  discover -s tests -v
 ```
 
 Run the full benchmark:
 
 ```bash
 MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python \
-  pennylane_project/tests/benchmark_scaling.py
+  benchmarks/benchmark_scaling.py
 ```
 
 Use `--quick` for a CI-sized subset. Raw results are in

@@ -1,8 +1,8 @@
-# Paper-style comparison plots for `logloss_nqubits`
+# Paper-style comparison plots for the log-loss notebooks
 
 This folder now contains a reproducible pipeline for comparing the original
-`logloss_nqubits.ipynb` implementation against
-`pennylane_project/logloss_nqubits_pennylane.ipynb` for selected qubit counts,
+`notebooks/paper/logloss.ipynb` implementation against
+`notebooks/pennylane/logloss_pennylane.ipynb` for selected qubit counts,
 defaulting to 2, 4, and 7 qubits.
 
 The pipeline produces:
@@ -18,8 +18,8 @@ The pipeline produces:
 From the repository root:
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_paper_comparison.py
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/plot_paper_comparison.py
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python benchmarks/benchmark_paper_comparison.py
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python benchmarks/plot_paper_comparison.py
 ```
 
 The quick run uses:
@@ -42,8 +42,8 @@ at or below `--full-original-threshold-seconds`.
 To match the paper-style scale more closely:
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_paper_comparison.py --paper
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/plot_paper_comparison.py
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python benchmarks/benchmark_paper_comparison.py --paper
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python benchmarks/plot_paper_comparison.py
 ```
 
 `--paper` sets:
@@ -61,7 +61,7 @@ you explicitly raise `--max-full-original-n`.
 Faster development run:
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_paper_comparison.py \
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python benchmarks/benchmark_paper_comparison.py \
   --epochs 40 \
   --samples 32 \
   --validation-samples 64
@@ -70,7 +70,7 @@ MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_
 More serious 2/4/7 comparison, still avoiding full dense `n=7`:
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_paper_comparison.py \
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python benchmarks/benchmark_paper_comparison.py \
   --epochs 500 \
   --samples 1000 \
   --validation-samples 500 \
@@ -81,7 +81,7 @@ MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_
 Force full original dense training at `n=7` only if you really want to wait:
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_paper_comparison.py \
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python benchmarks/benchmark_paper_comparison.py \
   --paper \
   --max-full-original-n 7
 ```
@@ -89,7 +89,7 @@ MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_
 Use a custom full-run gate:
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_paper_comparison.py \
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python benchmarks/benchmark_paper_comparison.py \
   --full-original-threshold-seconds 300
 ```
 
@@ -97,15 +97,15 @@ MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python pennylane_project/tests/benchmark_
 
 Benchmark CSVs:
 
-- `pennylane_project/benchmarks/paper_training_curves_2_4_7.csv`
-- `pennylane_project/benchmarks/paper_efficiency_summary_2_4_7.csv`
-- `pennylane_project/benchmarks/paper_sampling_efficiency_2_4_7.csv`
+- `benchmarks/paper_training_curves_2_4_7.csv`
+- `benchmarks/paper_efficiency_summary_2_4_7.csv`
+- `benchmarks/paper_sampling_efficiency_2_4_7.csv`
 
 Figures:
 
-- `pennylane_project/plots/paper_training_curves_2_4_7.png`
-- `pennylane_project/plots/paper_efficiency_comparison_2_4_7.png`
-- `pennylane_project/plots/paper_sampling_efficiency_2_4_7.png`
+- `figures/paper_training_curves_2_4_7.png`
+- `figures/paper_efficiency_comparison_2_4_7.png`
+- `figures/paper_sampling_efficiency_2_4_7.png`
 
 ## How to read the figures
 

@@ -13,6 +13,10 @@ from pathlib import Path
 
 import numpy as np
 
+import sys as _sys
+from pathlib import Path as _Path
+
+_sys.path.insert(0, str(_Path(__file__).resolve().parent.parent / "tests"))
 from notebook_test_utils import (
     REPO_ROOT,
     csr_payload_bytes,
@@ -26,7 +30,7 @@ from notebook_test_utils import (
 )
 
 
-OUTPUT_DIRECTORY = REPO_ROOT / "pennylane_project" / "benchmarks"
+OUTPUT_DIRECTORY = REPO_ROOT / "benchmarks"
 RESULTS_PATH = OUTPUT_DIRECTORY / "scaling_results.csv"
 QUICK_RESULTS_PATH = OUTPUT_DIRECTORY / "scaling_results_quick.csv"
 TEMPERATURE = 2.0

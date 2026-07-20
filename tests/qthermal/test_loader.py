@@ -70,17 +70,13 @@ def test_cached_unit_detector(h2o_record):
 def _make_synthetic_qh9_db(path, record):
     """Write a one-row SQLite DB in the raw QH9Stable schema.
 
-    The stored Hamiltonian must be in QH9's native AO ordering, so the
-    PySCF-ordered Fock matrix is inverse-transformed before storage.
+    Raw QH9Stable.db Hamiltonians are stored in PySCF AO ordering (verified
+    against fresh B3LYP spectra — see the loader module docstring), so the
+    Fock matrix is written as-is. The previous version of this helper
+    inverse-transformed through the QHBench convention, which encoded the
+    (wrong) reordering assumption into the round-trip test instead of
+    validating it against the real database.
     """
-    idx_map, signs = qh9_to_pyscf_transform(record.Z)
-    inv = np.argsort(idx_map)
-    F_signed = record.F * signs[:, None] * signs[None, :]
-    F_qh9 = F_signed[np.ix_(inv, inv)]
-    # Round-trip sanity for the test helper itself.
-    F_back = F_qh9[np.ix_(idx_map, idx_map)] * signs[:, None] * signs[None, :]
-    np.testing.assert_allclose(F_back, record.F, atol=1e-14)
-
     with sqlite3.connect(path) as conn:
         conn.execute("create table data (id integer primary key, N integer, "
                      "Z blob, pos blob, Ham blob)")
@@ -89,7 +85,7 @@ def _make_synthetic_qh9_db(path, record):
             (0, len(record.Z),
              record.Z.astype(np.int32).tobytes(),
              record.R.astype(np.float64).tobytes(),
-             F_qh9.astype(np.float64).tobytes()))
+             record.F.astype(np.float64).tobytes()))
         conn.commit()
 
 
@@ -103,9 +99,19 @@ def test_iter_records_sqlite_adapter(tmp_path, h2o_record):
     assert rec.idx == 0
     np.testing.assert_array_equal(rec.Z, h2o_record.Z)
     np.testing.assert_allclose(rec.R, h2o_record.R, atol=1e-14)
-    np.testing.assert_allclose(rec.F, h2o_record.F, atol=1e-12)
+    # Blob round-trip must be bit-exact: the adapter applies no reordering.
+    np.testing.assert_array_equal(rec.F, h2o_record.F)
     assert rec.C is None and rec.eps is None
     assert rec.F.dtype == np.float64
+
+
+def test_qh9_transform_helpers_are_valid_permutations(h2o_record):
+    """The QHBench-convention helpers (kept for processed/model matrices,
+    NOT used on the raw DB) must be self-consistent permutations."""
+    idx_map, signs = qh9_to_pyscf_transform(h2o_record.Z)
+    nao = h2o_record.F.shape[0]
+    assert sorted(idx_map.tolist()) == list(range(nao))
+    assert set(np.unique(signs)) <= {-1.0, 1.0}
 
 
 def test_iter_records_limit(tmp_path, h2o_record):

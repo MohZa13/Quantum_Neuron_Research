@@ -17,8 +17,9 @@ One file per run, gzip level 4 on all array datasets. Layout:
                                   tracedist_gaussian, tracedist_bound, cap_hit
 
 Resume safety: ``complete=True`` is written *last*; existing complete groups
-are skipped, incomplete ones (crashed runs) are deleted and rewritten. Only
-truncated ensembles are stored, never a full eigenvector matrix.
+are skipped, incomplete ones (crashed runs) are deleted and rewritten. Stored
+ensembles are truncated to the run's keep cap (``--keep-cap``; default
+``max(1024, dim // 4)``, 0 = uncapped, recorded in ``/meta`` as -1 = default).
 
 Everything numeric is float64 on disk; readers get float64 back — no implicit
 float32 anywhere.

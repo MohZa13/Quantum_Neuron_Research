@@ -93,11 +93,11 @@ def fdd_logloss_matrix(y, T, eigenvalues):
 
 
 def dfj(y, rho, eigvals, eigvecs, H_j_basis, T):
-    # NOTE: notebooks/paper/logloss.ipynb divides H_j_basis by T here, which is
-    # an extraneous factor -- the paper's Theorem 5 / Eq. (63) gradient is
-    # dH/dw_j = H_j directly (see docs/pennylane_optimization_summary.md,
-    # "Important note about gradients"). Fixed here so `run_original` matches
-    # the (correct) logloss_pennylane gradient instead of reproducing the bug.
+    # NOTE: the paper-original dfj divided H_j_basis by T here, an extraneous
+    # factor -- the paper's Theorem 5 / Eq. (63) gradient is dH/dw_j = H_j
+    # directly (see docs/paper_comparison_guide.md, "Important note about
+    # gradients"). notebooks/paper/logloss.ipynb and this reproduction both
+    # use the corrected form so the comparison is apples-to-apples.
     H_j_tilde = eigvecs.T.conj() @ H_j_basis @ eigvecs
     rho_tilde = eigvecs.T.conj() @ rho @ eigvecs
     F = fdd_logloss_matrix(y, T, eigvals)

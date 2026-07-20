@@ -28,7 +28,12 @@ import numpy as np
 
 from qthermal import __version__
 from qthermal.active_space import select_active
-from qthermal.diagonalize import DenseEDSolver, SectorTooLargeError
+from qthermal.diagonalize import (
+    KRYLOV_MAX_NROOTS,
+    DenseEDSolver,
+    IterativeWindowSolver,
+    SectorTooLargeError,
+)
 from qthermal.hamiltonian import build_cas_hamiltonian
 from qthermal.io_hdf5 import RunWriter
 from qthermal.loader import CachedUnitDetector, MoleculeRecord, iter_records
@@ -49,7 +54,8 @@ logger = logging.getLogger("qthermal.run")
 # prefix and every per-kT truncation downstream is still exact.
 _KT_MAX_UNBOUNDED = 1e12
 
-SOLVERS = {"dense": DenseEDSolver}   # Phase-2 backends slot in here
+SOLVERS = {"dense": DenseEDSolver,
+           "iterative": IterativeWindowSolver}   # Phase-2 backends slot in here
 
 
 @dataclass(frozen=True)
@@ -61,6 +67,15 @@ class RunConfig:
     kT_values: tuple
     kT_relative: bool
     weight_cutoff: float = DEFAULT_WEIGHT_CUTOFF
+    max_nroots: int = KRYLOV_MAX_NROOTS
+    keep_cap: int | None = None
+
+
+def make_solver(cfg: RunConfig):
+    if cfg.solver == "dense":
+        return DenseEDSolver(allow_large_dense=cfg.allow_large_dense,
+                             keep_cap=cfg.keep_cap)
+    return IterativeWindowSolver(max_nroots=cfg.max_nroots)
 
 
 def process_molecule(task: tuple[MoleculeRecord, str, RunConfig]) -> dict:
@@ -79,21 +94,23 @@ def process_molecule(task: tuple[MoleculeRecord, str, RunConfig]) -> dict:
         aspace = select_active(eps, nocc, cfg.n_act_occ, cfg.n_act_virt)
         ham = build_cas_hamiltonian(mol, C, nocc, aspace)
 
-        solver = SOLVERS[cfg.solver](allow_large_dense=cfg.allow_large_dense)
+        solver = make_solver(cfg)
         kT_max = (_KT_MAX_UNBOUNDED if cfg.kT_relative
                   else float(max(cfg.kT_values)))
         ens = solver.solve(ham.h1eff, ham.g, aspace, kT_max=kT_max,
                            weight_cutoff=cfg.weight_cutoff)
-        ens_g = gaussian_reference_ensemble(ham.h1eff, aspace, solver,
+        ens_g = gaussian_reference_ensemble(ham.h1eff, aspace,
                                             kT_max=kT_max,
-                                            weight_cutoff=cfg.weight_cutoff)
+                                            weight_cutoff=cfg.weight_cutoff,
+                                            keep_cap=cfg.keep_cap)
 
         width = (float(ens.evals_full[-1] - ens.evals_full[0])
                  if ens.evals_full is not None else None)
         kT_list, _ = resolve_kT_list(cfg.kT_values, cfg.kT_relative,
                                      spectral_width=width)
         blocks = [build_thermal_block(ens, ens_g, kT, aspace,
-                                      weight_cutoff=cfg.weight_cutoff)
+                                      weight_cutoff=cfg.weight_cutoff,
+                                      keep_cap=cfg.keep_cap)
                   for kT in kT_list]
 
         return {
@@ -151,12 +168,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--solver", choices=sorted(SOLVERS), default="dense")
     p.add_argument("--allow-large-dense", action="store_true",
                    help="permit dense ED for 5,000 < dim <= 70,000 (RAM-checked)")
+    p.add_argument("--max-nroots", type=int, default=KRYLOV_MAX_NROOTS,
+                   help="iterative solver: root-count ceiling; escalation "
+                        "past it sets cap_hit (default %(default)s)")
     p.add_argument("--kT-list", default=",".join(str(k) for k in DEFAULT_KT_LIST),
                    help="comma-separated temperatures (default 0.05,0.10,0.25)")
     p.add_argument("--kT-relative", action="store_true",
                    help="interpret --kT-list as fractions of the sector "
                         "spectral width instead of Hartree")
     p.add_argument("--weight-cutoff", type=float, default=DEFAULT_WEIGHT_CUTOFF)
+    p.add_argument("--keep-cap", type=int, default=None,
+                   help="max eigenvectors stored per ensemble and per kT "
+                        "block (default: dim // 4, min 1024); 0 = uncapped — "
+                        "the weight cutoff alone decides, at m x dim float64 "
+                        "storage cost")
     p.add_argument("--workers", type=int, default=1)
     p.add_argument("--log-level", default="INFO")
     return p
@@ -172,10 +197,19 @@ def main(argv=None) -> int:
     if not kT_values or any(k <= 0 for k in kT_values):
         logger.error("invalid --kT-list %r", args.kT_list)
         return 2
+    if args.kT_relative and args.solver != "dense":
+        logger.error("--kT-relative needs the sector spectral width, which "
+                     "only the dense solver provides; use --solver dense")
+        return 2
+    if args.keep_cap is not None and args.keep_cap < 0:
+        logger.error("--keep-cap must be >= 0 (0 = uncapped), got %d",
+                     args.keep_cap)
+        return 2
     cfg = RunConfig(n_act_occ=args.n_act_occ, n_act_virt=args.n_act_virt,
                     solver=args.solver, allow_large_dense=args.allow_large_dense,
                     kT_values=kT_values, kT_relative=args.kT_relative,
-                    weight_cutoff=args.weight_cutoff)
+                    weight_cutoff=args.weight_cutoff,
+                    max_nroots=args.max_nroots, keep_cap=args.keep_cap)
 
     import pyscf
     meta = {
@@ -188,6 +222,8 @@ def main(argv=None) -> int:
         "kT_convention": ("relative_spectral_width" if cfg.kT_relative
                           else "absolute_hartree"),
         "weight_cutoff": cfg.weight_cutoff,
+        # HDF5 attrs can't hold None: -1 = default max(1024, dim // 4).
+        "keep_cap": -1 if cfg.keep_cap is None else cfg.keep_cap,
         "code_version": __version__,
         "pyscf_version": pyscf.__version__,
         "unit": "pending",
