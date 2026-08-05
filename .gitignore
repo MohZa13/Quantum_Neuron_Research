@@ -22,3 +22,6 @@ outputs/
 
 .pytest_cache/
 **/.pytest_cache/
+
+# resumable-screen checkpoint artifacts
+*.partial
