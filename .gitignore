@@ -25,3 +25,13 @@ outputs/
 
 # resumable-screen checkpoint artifacts
 *.partial
+
+# generated artifacts: outputs, not sources.  Every pattern below has a
+# producer recorded in DATA_CATALOG.md §5-7 — regenerate, do not commit.
+# Scripts in figures/ and benchmarks/ stay tracked, as does docs/fig_8.png
+# (a paper input).  The .json findings under results/ stay tracked too.
+figures/*.png
+benchmarks/*.csv
+results/*.csv
+results/*.log
+results/digitized/
