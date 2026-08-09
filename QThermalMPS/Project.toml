@@ -1,0 +1,31 @@
+name = "QThermalMPS"
+uuid = "b3f1a2c4-7d8e-4a5b-9c0d-1e2f3a4b5c6d"
+version = "0.1.0"
+authors = ["Quantum Neuron Research"]
+
+[deps]
+Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+ITensorMPOConstruction = "f1f99f3b-4b00-4d2f-a9c2-ce76efdc8f31"
+ITensorMPS = "0d1a4710-d33b-49a5-8f18-73bdf49b47e2"
+ITensors = "9136182c-28ba-11e9-034c-db9fb085ebd5"
+KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[compat]
+Combinatorics = "1.1.0"
+HDF5 = "0.17"
+ITensorMPOConstruction = "0.2.2"
+ITensorMPS = "0.3"
+ITensors = "0.9"
+KrylovKit = "0.8, 0.9"
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
