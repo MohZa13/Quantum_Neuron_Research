@@ -70,6 +70,7 @@ Run as plain scripts (`python -m scripts.foo` or `python scripts/foo.py`).
 | File | |
 |---|---|
 | `screen_conjugation.py` | **[entry]** Cheap three-tier triage over the whole QH9 DB: Tier 1 degree of unsaturation (formula only), Tier 2 frontier gap + near-degenerate frontier DOS (`eigh(F,S)`), Tier 3 largest conjugated π-subsystem (RDKit, optional — degrades gracefully). Resumable via `.partial` checkpoint |
+| `build_diimine_probe.py` | **[entry]** The one off-QH9 molecule: hexa-2,4-diene-1,6-diimine (not in QH9 Stable — verified) built at QH9's level of theory (RDKit MMFF geometry + B3LYP/def2-SVP) and exported as solver-free Module-G-layout integrals for ncas = 10..20, for the Module K scaling probes (RESEARCH_LOG 2026-08-11) |
 | `export_thermal_training.py` | **[entry]** ★ **The bridge.** Run file → `{ρ_m, y_m}` training HDF5 in eigenblock form for the Julia trainers. **The label is pluggable and the default (`h5:static_corr`) is an acknowledged placeholder** |
 | `spin_labels.py` | **[entry]** Thermal `⟨S²⟩` split into its diagonal part `D` (how many unpaired electrons — classical) and coherence-only part `c = Tr(ρ S²_od)` (how they are coupled). Sector `S²` built once from `contract_ss`; optionally emits the qubit-projected ρ stack |
 | `train_spin_comparison.py` | **[entry]** Quantum vs classical Fermi-Dirac neuron on those labels — identical loss/optimizer/split, differing only in off-diagonal pool reach. Includes the R± screening metric, a classical-descriptor baseline, and a positive control. `--replot` re-renders from JSON |
