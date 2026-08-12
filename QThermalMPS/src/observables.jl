@@ -294,7 +294,13 @@ function physical_rdm(
     end
     open_of(j) = (s[j], prime(dag(s[j])))
 
-    E = _sweep_env(pieces, open_of, keep, length(p), combine, meet)
+    # The final environment intentionally carries all 2k open legs (k = 10 is
+    # order 20), so ITensors' order-14 warning would fire -- with a full stack
+    # trace -- on every join of every export.  The `maxwires` guard above is
+    # the real protection; silence the advisory one for this contraction.
+    E = ITensors.@disable_warn_order _sweep_env(
+        pieces, open_of, keep, length(p), combine, meet
+    )
 
     # Reversed for the same reason as `dense_mpo`: column-major `reshape` makes
     # the leading axis least significant, and the register convention is that

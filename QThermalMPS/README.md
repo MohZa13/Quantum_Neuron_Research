@@ -66,6 +66,7 @@ julia -t 8 --project=QThermalMPS QThermalMPS/bin/thermal.jl \
 | `io.jl` | run files in, ladders out |
 | `observables.jl` | `rho`, reduced density matrices, Pauli expectations |
 | `evolve.jl` | the imaginary-time ladder |
+| `fused.jl` | the fused wire+ancilla backend (below) |
 
 ## Four things that are easy to get wrong
 
@@ -130,6 +131,55 @@ accident. This confirms and sharpens the standing guidance in
 `docs/RESEARCH_LOG.md` (2026-07-27) and `INVARIANTS.md` I12 — which was
 measured for the eigenblock purification, and now holds for the
 imaginary-time one too.
+
+## The fused backend, and the geometry measurement behind it
+
+`FusedLayout` puts each wire and its own ancilla on ONE dim-4 site: half the
+chain at measured-identical bond dimension. The measurement (dense TT-SVD of
+the same thermal purification, h2o CAS(8,6), kT = 0.25):
+
+| grouping | sites | χ@1e-10 |
+|---|---|---|
+| qubit-blocked (split backend) | 24 | 221 |
+| **fused wire+ancilla** | **12** | **222** |
+| orbital-fused (ITensor "Electron" sites) | 12 | **664** |
+
+The obvious chain-halving — Electron sites, as in standard QC-DMRG — forces
+the orbital geometry these thermal states pay 3× χ for (~30× at χ³ per
+update), so it is deliberately not implemented. The fused backend measures
+1.37× end-to-end on a real ladder (setup 97 s → 7 s, ladder 1057 s → 837 s,
+h2o CAS(8,6), same accuracy), with two structural bonuses: JW strings cannot
+dress ancillas (the string operator is `(-1)^{n_phys}` of the site), and the
+MPO compiles directly on the chain (3 QNVals used, one left for the compiler).
+
+**Trap 5, found here: `ITensorMPOConstruction.MPO_new` mis-signs fermionic
+operators on the fused site type** — hopping terms acquire an extra
+`(-1)^{n_anc}` on the operator site. It is a sign-gauge conjugation of the
+right Hamiltonian, so `<H>`, `<H^2>`, and every thermodynamic self-consistency
+check pass; only an evolved state exported to the fixed register (or the
+element-by-element dense comparison in `test_fused.jl`) shows it. The fused
+backend therefore compiles with ITensor's own `MPO(os, sites)` (`alg =
+:itensor` default) — once per molecule, cost irrelevant.
+
+## RDM export: meet-in-the-middle
+
+Sweeping one environment across the chain carries all `k` open wires through
+every bond — `Σ_k 4^k χ³` work, ~15 min per cold ncas = 10 state in the first
+production run. `physical_rdm` now builds left and right half-environments
+that each carry half the open register and joins them once
+(`O(4^{k/2} χ³ + 4^k χ²)`), with ket/bra opens folded into combined QN
+indices to keep block counts flat. Measured on the stored production states,
+bit-exact against the old path:
+
+| state | old | combine only | meet+combine |
+|---|---|---|---|
+| mol_3 kT = 0.1, χ = 256 | ~900 s | 393 s | **5.0 s** |
+| mol_3 kT = 1.0, χ = 64 | 637 s | 246 s | 173 s |
+
+The warm state stays slower because it is block-bound, not FLOP-bound: near
+ln(dim) entropy spreads weight over many QN sectors per bond. (The fused
+backend drops the `Sza` charge and coarsens blocks, which helps exactly
+there.)
 
 ## Cost
 
@@ -230,13 +280,76 @@ exactly, symmetric to 1e-16, PSD to 1e-17. The subsystem RDM is unit-trace *by
 construction*, so unlike the top-determinants projection it carries no
 truncation error for a threshold model to mistake for signal.
 
+## Where the time goes (measured 2026-08-10)
+
+Every stage runs inside a `TimerOutputs` section (`QThermalMPS.TIMER`);
+`bin/thermal.jl --profile 1` prints the per-molecule table below plus a
+per-chunk `chi`/time trace, and `--warmup` (on by default when profiling)
+absorbs JIT into a tiny synthetic ladder first. The production mol_3 ladder,
+re-run at its exact settings (reproduces every rung energy digit for digit;
+8 threads, Julia 1.12.6):
+
+| stage | wall | share |
+|---|---|---|
+| read + setup (opsum, compile, inflate, psi0) + guard | 5.9 s | 0.1% |
+| ladder: **tdvp** | **5620 s** | **90.3%** |
+| ladder: expand | 455 s | 7.3% |
+| rho export (6 temperatures) | 141 s | 2.3% |
+| everything else (writes, renorms, snapshot energies) | ~6 s | 0.1% |
+| package load + JIT warmup, once per process | 211 s | — |
+
+**An earlier version of this README claimed the expansion dominated; that was
+an unmeasured hypothesis and the profile refutes it** — TDVP dominates every
+rung. Acting on that profile (second 2026-08-10 RESEARCH_LOG entry), the
+local-solver defaults were replaced: KrylovKit's stock `exponentiate` ran
+Arnoldi at tol 1e-12 with no early exit, and the instituted default
+(Lanczos + `eager` + tol = cutoff/10) is a **certified 4.4x end-to-end**
+(6227 → 1411 s on the production mol_3 ladder, energies within truncation
+noise, 798/798 tests) — `--solver-tol none` recovers the old behavior.
+Opt-in `--nsite-capped 1` adds 2.36x on capped chunks at +2e-4/beta drift;
+`rho` exports are now shuffle+deflate compressed (57 → ~10 MB per molecule,
+transparent to readers). **`--backend fused` is EXPERIMENTAL at ncas = 10**:
+it is no faster there (dim-4 sites are ~1.5x/step slower at the cap) and its
+warm rungs misconverge by 4e-3..4e-2 with the trap-2 signature — see the
+2026-08-10 RESEARCH_LOG entry before using it beyond ncas = 6. Three measured
+facts that steer further optimisation
+(`docs/RESEARCH_LOG.md` 2026-08-10 for the full analysis):
+
+- Per-TDVP-step cost is strongly *sublinear* in `chi` here (24 s/step at
+  chi = 19, 64 s at 64, ~103 s at 256): block-count-bound, not FLOP-bound, so
+  the chi = 512-1024 convergence rerun costs far less than chi^3 fear
+  suggests, and per-step overhead beats `maxdim` as a target.
+- Expansion's footprint is mostly *indirect*: the tdvp chunk right after an
+  expansion sweeps at the directsum-inflated bond (202 s/step vs 103 steady).
+- 19 of the 57 TDVP steps cover beta 4→10 where the state barely moves — the
+  `ramp`/`dbeta_max` grading is the cheapest big lever; `converge_dbeta`
+  certifies it. The Lanczos `exponentiate` also runs at ~1e-12 tolerance
+  against a 1e-8 truncation cutoff (`updater_kwargs` is plumbed, untested).
+
+## Open shell, and scaling out
+
+**Open-shell sectors (S_z != 0, odd electron counts) are supported**
+(2026-08-11): the MPS layer was always `(nalpha, nbeta)`-general — layouts,
+QN flux, the beta = 0 state, the closed form, both backends — and the one
+blocker, `read_case`'s S_z = 0 file contract, now honors `nalpha`/`nbeta`
+meta attributes (legacy files read unchanged). Validated against dense
+exp(-beta H) in odd-electron sectors (`test/test_openshell.jl`) and
+end-to-end on the allyl radical (ROHF-CASCI(3,3), doublet: exact-reference
+agreement at the dbeta^2 level). Upstream caveat: QH9/Phase 1 only produce
+closed-shell inputs (RHF-CASCI); open-shell files come from custom ROHF
+exporters. Only S_z is conserved, not S^2 — the ladder prepares the
+S_z-canonical ensemble. Expect larger chi for radicals: multiplet
+degeneracies make flat Schmidt blocks.
+
+**Parallel structure**: per-molecule and per-setting runs are independent
+processes with zero cross-talk (job-array shaped; ~10-55 GB RSS each by
+chi); a single ladder's temperatures are inherently sequential (one
+imaginary-time flow); in-process threading saturates ~4x on 8 cores. Scale
+out at the process level.
+
 ## Status
 
 Validated end to end against exact references for `ncas <= 6`, and bracketed at
 both ends at `ncas = 10`. The method **reaches** ncas = 10; converging it there
 costs more bond dimension than this run spent. Open: a run at χ in the low
 thousands to converge kT ≤ 0.5, and the second molecule in the file.
-
-Most of the wall time is the subspace expansion, not TDVP — `expand` builds
-`H|psi>` at bond `chi * 103` before truncating. Bounding that intermediate is
-the obvious next optimisation.

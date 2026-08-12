@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "aea7a26cf5387112982de880b690edccb90d407f"
+project_hash = "573ee91f1016bc17ad91def549b97ce0d9f2904c"
 
 [[deps.Accessors]]
 deps = ["CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "MacroTools"]
@@ -618,7 +618,7 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
 [[deps.QThermalMPS]]
-deps = ["Combinatorics", "HDF5", "ITensorMPS", "ITensors", "KrylovKit", "LinearAlgebra", "Printf", "Random", "Statistics"]
+deps = ["Combinatorics", "HDF5", "ITensorMPOConstruction", "ITensorMPS", "ITensors", "KrylovKit", "LinearAlgebra", "Printf", "Random", "Statistics"]
 path = "."
 uuid = "b3f1a2c4-7d8e-4a5b-9c0d-1e2f3a4b5c6d"
 version = "0.1.0"

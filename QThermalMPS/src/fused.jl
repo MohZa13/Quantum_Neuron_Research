@@ -203,21 +203,23 @@ function infinite_temperature_mps(
         L::FusedLayout, sites::Vector{<:Index};
         cutoff::Float64 = 1.0e-16, maxdim::Int = 10_000
     )
-    psi = MPS(sites, fill("00", L.nsites))
-    for (spin, n) in ((0, L.nalpha), (1, L.nbeta))
-        n == 0 && continue
-        os = OpSum()
-        for w in 0:(L.nwires - 1)
-            L.spin_of_wire[w + 1] == spin || continue
-            os += 1.0, "Raise", w + 1
+    @timeit TIMER "setup: psi0 (beta=0 MPS)" begin
+        psi = MPS(sites, fill("00", L.nsites))
+        for (spin, n) in ((0, L.nalpha), (1, L.nbeta))
+            n == 0 && continue
+            os = OpSum()
+            for w in 0:(L.nwires - 1)
+                L.spin_of_wire[w + 1] == spin || continue
+                os += 1.0, "Raise", w + 1
+            end
+            K = MPO(os, sites)
+            for _ in 1:n
+                psi = apply(K, psi; cutoff = cutoff, maxdim = maxdim)
+                normalize!(psi)
+            end
         end
-        K = MPO(os, sites)
-        for _ in 1:n
-            psi = apply(K, psi; cutoff = cutoff, maxdim = maxdim)
-            normalize!(psi)
-        end
+        normalize!(psi)
     end
-    normalize!(psi)
     return psi
 end
 
@@ -297,7 +299,11 @@ function physical_rdm(
     end
     open_of(j) = (ket_open[j], bra_open[j])
 
-    E = _sweep_env(pieces, open_of, keep, length(psi), combine, meet)
+    # Same as the split backend: the order-2k final environment is intentional;
+    # `maxwires` is the real guard.
+    E = ITensors.@disable_warn_order _sweep_env(
+        pieces, open_of, keep, length(psi), combine, meet
+    )
 
     kets = [ket_open[w + 1] for w in ws]
     bras = [bra_open[w + 1] for w in ws]
@@ -322,8 +328,10 @@ function thermal_ladder(
         mpo_kwargs = (;), kwargs...
     )
     all(kTs .> 0) || throw(ArgumentError("temperatures must be positive"))
-    L = FusedLayout(case.ncas, case.nalpha, case.nbeta)
-    sites = build_sites(L; conserve_sz = conserve_sz)
+    L, sites = @timeit TIMER "setup: layout+sites" begin
+        Lb = FusedLayout(case.ncas, case.nalpha, case.nbeta)
+        (Lb, build_sites(Lb; conserve_sz = conserve_sz))
+    end
     H = purification_mpo(case.h1, case.g, L, sites; tol = tol, mpo_kwargs...)
     psi0 = infinite_temperature_mps(L, sites)
     betas = sort([1 / kT for kT in kTs])

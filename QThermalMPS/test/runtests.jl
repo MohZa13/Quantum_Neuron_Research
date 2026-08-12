@@ -45,4 +45,7 @@ include("testutils.jl")
     @testset "fused" begin
         include("test_fused.jl")
     end
+    @testset "openshell" begin
+        include("test_openshell.jl")
+    end
 end

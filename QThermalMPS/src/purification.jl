@@ -68,18 +68,20 @@ function infinite_temperature_mps(
         L::PurificationLayout, sites::Vector{<:Index};
         cutoff::Float64 = 1.0e-16, maxdim::Int = 10_000
     )
-    psi = MPS(sites, fill("Emp", L.nsites))
-    for (spin, n) in ((0, L.nalpha), (1, L.nbeta))
-        n == 0 && continue
-        K = MPO(pair_raise_opsum(L, spin), sites)
-        for _ in 1:n
-            psi = apply(K, psi; cutoff = cutoff, maxdim = maxdim)
-            # The raw power carries a factorial; renormalising every step
-            # keeps the tensors in a sane range and costs nothing.
-            normalize!(psi)
+    @timeit TIMER "setup: psi0 (beta=0 MPS)" begin
+        psi = MPS(sites, fill("Emp", L.nsites))
+        for (spin, n) in ((0, L.nalpha), (1, L.nbeta))
+            n == 0 && continue
+            K = MPO(pair_raise_opsum(L, spin), sites)
+            for _ in 1:n
+                psi = apply(K, psi; cutoff = cutoff, maxdim = maxdim)
+                # The raw power carries a factorial; renormalising every step
+                # keeps the tensors in a sane range and costs nothing.
+                normalize!(psi)
+            end
         end
+        normalize!(psi)
     end
-    normalize!(psi)
     return psi
 end
 

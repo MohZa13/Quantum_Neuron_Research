@@ -31,6 +31,25 @@ using LinearAlgebra
 using Printf
 using Random
 using Statistics
+using TimerOutputs
+
+"""
+    TIMER
+
+Package-wide `TimerOutputs.TimerOutput` behind every `@timeit` section in the
+pipeline: setup (opsum, MPO compile, inflate, beta = 0 state), the ladder
+(per-rung `expand` / `tdvp` / renormalisation / snapshot energies), and I/O
+(`read_case`, MPS writes, RDM export).  Always on -- the per-section overhead
+is ~1 microsecond against stages that run for seconds -- so any run can be
+asked where its time went after the fact:
+
+    using TimerOutputs
+    print_timer(QThermalMPS.TIMER; sortby = :firstexec)
+    reset_timer!(QThermalMPS.TIMER)          # per-molecule accounting
+
+`bin/thermal.jl --profile 1` prints exactly this per molecule.
+"""
+const TIMER = TimerOutput()
 
 include("layout.jl")
 include("sites.jl")

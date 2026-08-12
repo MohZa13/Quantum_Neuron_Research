@@ -83,6 +83,18 @@ Keywords:
   * `maxdim = 256`, `cutoff = 1e-10` -- bond truncation.
   * `nsite = 2` -- two-site TDVP.  Setting this to 1 freezes the bond
     dimension outright.
+  * `nsite_capped = nsite` -- TDVP variant used for chunks that START with
+    `chi >= maxdim` while expansion is off.  `1` switches to one-site sweeps
+    there: no bond can grow at the cap anyway, and one-site is ~2x cheaper --
+    but it also freezes the QN sector split of every bond, which two-site
+    sweeps keep re-balancing as the state cools.  Opt-in; certify against a
+    two-site run before trusting it cold (see `converge_dbeta` culture).
+  * `updater_kwargs = nothing` -- keyword overrides for KrylovKit's
+    `exponentiate` in each local update.  `nothing` selects the package
+    default `(; issymmetric = true, eager = true, tol = clamp(cutoff/10,
+    1e-12, 1e-8))` -- Lanczos instead of Arnoldi, early convergence exit, and
+    a solve tolerance one decade under the truncation cutoff.  Pass `(;)` to
+    recover KrylovKit's stock behavior.
   * `chunk = 1.0` -- longest stretch of beta between renormalisations.
     Clamped internally against the running energy so the norm cannot overflow.
   * `expand_cutoff = 1e-9`, `expand_every = 10*dbeta`, `expand_krylovdim = 2`,
@@ -93,10 +105,12 @@ function thermal_ladder(
         dbeta::Float64 = 0.05, dbeta_max::Union{Nothing, Float64} = nothing,
         ramp::Float64 = 1.0,
         maxdim::Int = 256, cutoff::Float64 = 1.0e-10,
-        nsite::Int = 2, chunk::Float64 = 1.0,
+        nsite::Int = 2, nsite_capped::Int = nsite, chunk::Float64 = 1.0,
         expand_cutoff::Union{Nothing, Float64} = 1.0e-9,
         expand_every::Union{Nothing, Float64} = nothing,
         expand_krylovdim::Int = 2, stall_limit::Int = 3,
+        expand_apply_alg::Union{Nothing, String} = nothing,
+        updater_kwargs = nothing,
         outputlevel::Int = 0, verbose::Bool = false
     )
     isempty(betas) && return ThermalSnapshot[]
@@ -109,6 +123,21 @@ function thermal_ladder(
     every = expand_every === nothing ? 10 * dbeta : expand_every
     step_at(b) = min(dmax, dbeta * (1 + b / ramp))
 
+    # Local-solver settings for KrylovKit's `exponentiate`.  The stock defaults
+    # are wrong for this problem three ways at once (measured 2026-08-10, see
+    # docs/RESEARCH_LOG.md): `issymmetric = false` runs Arnoldi with full
+    # orthogonalization on an operator that is real-symmetric; `eager = false`
+    # builds all `krylovdim = 30` basis vectors before the first convergence
+    # check even when a handful suffice for these small imaginary-time steps;
+    # and `tol = 1e-12` solves four orders below the truncation cutoff that
+    # dominates the error budget.  The derived tolerance stays a decade under
+    # `cutoff` so the local solves never become the leading error term.
+    upk = updater_kwargs === nothing ?
+        (; issymmetric = true, eager = true,
+           tol = clamp(cutoff / 10, 1.0e-12, 1.0e-8)) :
+        updater_kwargs
+
+    return @timeit TIMER "ladder" begin
     psi = copy(psi0)
     normalize!(psi)
     loghalf = 0.0                 # log || e^{-beta H/2} |Psi0> ||
@@ -125,11 +154,23 @@ function thermal_ladder(
     # sit more than a few standard deviations below the beta = 0 mean.  Ten is
     # generous, and this costs one MPO application instead of one per chunk --
     # which at chi = 256 is not a rounding error.
-    e0 = energy(psi, H)
-    sigma0 = sqrt(max(energy_variance(psi, H), 0.0))
-    safe = 60.0 / max(abs(e0) + 10 * sigma0, 1.0)
+    safe = @timeit TIMER "overflow guard <H>,<H^2>" begin
+        e0 = energy(psi, H)
+        sigma0 = sqrt(max(energy_variance(psi, H), 0.0))
+        if verbose
+            # <H> at beta = 0 equals `sector_mean_energy`'s closed form when
+            # the MPO and the purification are right -- printing it makes
+            # every verbose run self-reporting against that external check.
+            @printf("    guard: <H>(beta=0) = %.10f  sigma = %.4f\n", e0, sigma0)
+            flush(stdout)
+        end
+        60.0 / max(abs(e0) + 10 * sigma0, 1.0)
+    end
 
     for target in betas
+        rung = @sprintf("rung kT=%.4g (beta=%.4g)",
+                        target > 0 ? 1 / target : Inf, target)
+        @timeit TIMER rung begin
         t0 = time()
         nsteps_total = 0
         while beta < target - 1.0e-14
@@ -141,35 +182,74 @@ function thermal_ladder(
             n = max(1, ceil(Int, span / step_at(beta)))
             step = span / n
 
+            chi_in = maxlinkdim(psi)
+            t_ex = 0.0
             if growing
+                t_ex = time()
                 # Adds directions, not amplitude -- the state is unchanged, so
                 # the norm ratio is 1 and this line is bookkeeping insurance
                 # rather than physics.
-                psi = expand(
+                # `expand_apply_alg = "zipup"` bounds the Krylov-reference
+                # apply's intermediate at ~2*(chi+1) instead of chi * (MPO
+                # bond): the library-default densitymatrix apply peaked at
+                # 62.7 GB and OOM-killed the ncas = 18 probe (2026-08-11),
+                # and its cost had overtaken TDVP itself there (900 s vs
+                # 400 s per chunk).  References are only direction donors,
+                # so zipup's per-site truncation is quality-adequate.
+                @timeit TIMER "expand" psi = expand(
                     psi, H; alg = "global_krylov",
-                    krylovdim = expand_krylovdim, cutoff = expand_cutoff
+                    krylovdim = expand_krylovdim, cutoff = expand_cutoff,
+                    (expand_apply_alg === nothing ? (;) :
+                     (; apply_kwargs = (; alg = expand_apply_alg,
+                                          maxdim = maxlinkdim(psi) + 1,
+                                          cutoff = 1.0e-12)))...
                 )
-                loghalf += log(norm(psi))
-                normalize!(psi)
+                @timeit TIMER "renormalise" begin
+                    loghalf += log(norm(psi))
+                    normalize!(psi)
+                end
+                t_ex = time() - t_ex
             end
 
-            psi = tdvp(
+            # One-site TDVP once chi sits at the cap and expansion is off:
+            # no bond can grow there anyway, and the two-site update's only
+            # remaining role -- re-balancing QN sector dimensions inside the
+            # capped bond -- is opt-in to give up (`nsite_capped = 1`).
+            # Decided on `chi_in` (pre-expansion), so an active expansion is
+            # never truncated by a one-site sweep.
+            ns = (!growing && chi_in >= maxdim) ? nsite_capped : nsite
+
+            t_td = time()
+            @timeit TIMER "tdvp" psi = tdvp(
                 H, -step * n / 2, psi;
-                nsteps = n, nsite = nsite, maxdim = maxdim, cutoff = cutoff,
-                normalize = false, outputlevel = outputlevel
+                nsteps = n, nsite = ns, maxdim = maxdim, cutoff = cutoff,
+                normalize = false, outputlevel = outputlevel,
+                updater_kwargs = upk
             )
-            nrm = norm(psi)
-            isfinite(nrm) && nrm > 0 ||
-                error("evolution norm went to $nrm at beta=$(beta + span); " *
-                      "reduce `chunk` or `dbeta`")
-            loghalf += log(nrm)
-            normalize!(psi)
+            @timeit TIMER "renormalise" begin
+                nrm = norm(psi)
+                isfinite(nrm) && nrm > 0 ||
+                    error("evolution norm went to $nrm at beta=$(beta + span); " *
+                          "reduce `chunk` or `dbeta`")
+                loghalf += log(nrm)
+                normalize!(psi)
+            end
+            t_td = time() - t_td
 
             if growing
                 chi = maxlinkdim(psi)
                 stalls = chi > chi_prev ? 0 : stalls + 1
                 chi_prev = chi
                 (stalls >= stall_limit || chi >= maxdim) && (growing = false)
+            end
+
+            if verbose
+                @printf(
+                    "      chunk beta %7.3f -> %7.3f  n=%2d(%ds) dbeta=%.4f  chi %4d -> %4d  expand %7.1fs  tdvp %7.1fs\n",
+                    beta, beta + span, n, ns, step, chi_in, maxlinkdim(psi),
+                    t_ex, t_td
+                )
+                flush(stdout)
             end
 
             beta += span
@@ -189,7 +269,7 @@ function thermal_ladder(
         beta = max(beta, float(target))
 
         logZ = log(dim) + 2 * loghalf
-        e = energy(psi, H)
+        e = @timeit TIMER "snapshot <H>" energy(psi, H)
         # S = beta*E + log Z, which is ln(dim) at beta = 0 and ln(degeneracy)
         # as beta -> infinity.  F follows from S, not the other way round.
         s = beta * e + logZ
@@ -208,8 +288,10 @@ function thermal_ladder(
             )
             flush(stdout)
         end
+        end # @timeit rung
     end
-    return out
+    out
+    end # @timeit ladder
 end
 
 """
@@ -228,8 +310,10 @@ function thermal_ladder(
         tol::Float64 = 1.0e-14, mpo_kwargs = (;), kwargs...
     )
     all(kTs .> 0) || throw(ArgumentError("temperatures must be positive"))
-    L = PurificationLayout(case.ncas, case.nalpha, case.nbeta; ordering = ordering)
-    sites = build_sites(L; conserve_sz = conserve_sz)
+    L, sites = @timeit TIMER "setup: layout+sites" begin
+        Lb = PurificationLayout(case.ncas, case.nalpha, case.nbeta; ordering = ordering)
+        (Lb, build_sites(Lb; conserve_sz = conserve_sz))
+    end
     H = purification_mpo(case.h1, case.g, L, sites; tol = tol, mpo_kwargs...)
     psi0 = infinite_temperature_mps(L, sites)
 

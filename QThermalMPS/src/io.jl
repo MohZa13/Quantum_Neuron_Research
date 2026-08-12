@@ -33,15 +33,34 @@ nelec(c::MoleculeCase) = c.nalpha + c.nbeta
 """
     read_case(path, molname) -> MoleculeCase
 
-Read one `mol_*` group.  `nalpha`/`nbeta` come from `/meta`'s `nelecas`
-(Phase 1 is S_z = 0 by construction, so they are equal).
+Read one `mol_*` group.
+
+SPIN SECTOR.  When `/meta` carries `nalpha`/`nbeta` attributes they define
+the sector directly — including open-shell `nalpha != nbeta` (any S_z), for
+which every downstream consumer (both layouts, flux, psi0, closed form) is
+already general.  Files without those attributes predate the open-shell
+extension (2026-08-11) and carry the original Phase 1 contract, S_z = 0 with
+even `nelecas`; they read exactly as before.  Note the upstream caveat: the
+QH9 Phase 1 pipeline itself only PRODUCES closed-shell files (QH9 is a
+closed-shell dataset, RHF-CASCI); open-shell inputs come from custom
+exporters (ROHF-CASCI) that write the two extra attributes.
 """
 function read_case(path::AbstractString, molname::AbstractString)
-    return h5open(path, "r") do f
+    return @timeit TIMER "read case" h5open(path, "r") do f
         meta = attrs(f["meta"])
         ncas = Int(meta["ncas"])
         ne = Int(meta["nelecas"])
-        iseven(ne) || error("nelecas=$ne is odd; Phase 1 assumes S_z = 0")
+        na, nb = if haskey(meta, "nalpha") && haskey(meta, "nbeta")
+            Int(meta["nalpha"]), Int(meta["nbeta"])
+        else
+            iseven(ne) || error(
+                "nelecas=$ne is odd and /meta has no nalpha/nbeta; legacy " *
+                    "S_z = 0 files require even nelecas"
+            )
+            ne ÷ 2, ne ÷ 2
+        end
+        na + nb == ne ||
+            error("meta inconsistent: nalpha+nbeta=$(na + nb) != nelecas=$ne")
 
         grp = f[molname]
         haskey(grp, "h1eff") || error("$molname has no h1eff")
@@ -55,7 +74,7 @@ function read_case(path::AbstractString, molname::AbstractString)
         size(h1) == (ncas, ncas) || error("h1eff shape $(size(h1)) != ($ncas,$ncas)")
         size(g) == (ncas, ncas, ncas, ncas) || error("g shape $(size(g)) wrong")
 
-        MoleculeCase(molname, Z, Float64(ecore), h1, g, ncas, ne ÷ 2, ne ÷ 2, evals)
+        MoleculeCase(molname, Z, Float64(ecore), h1, g, ncas, na, nb, evals)
     end
 end
 
@@ -141,7 +160,7 @@ function write_ladder(
     wires = rho_wires === :all ? collect(0:(L.nwires - 1)) :
         (rho_wires === nothing ? nothing : collect(rho_wires))
 
-    h5open(path, isfile(path) ? "r+" : "w") do f
+    @timeit TIMER "write ladder" h5open(path, isfile(path) ? "r+" : "w") do f
         if !haskey(f, "meta")
             m = create_group(f, "meta")
             attributes(m)["ncas"] = L.ncas
@@ -186,9 +205,20 @@ function write_ladder(
             b["maxlinkdim"] = s.maxlinkdim
             b["steps"] = s.steps
             b["seconds"] = s.seconds
-            write(b, "psi", s.psi)
+            @timeit TIMER "write: psi" write(b, "psi", s.psi)
             if wires !== nothing
-                b["rho"] = physical_rdm(s.psi, L, wires; maxwires = maxwires)
+                @timeit TIMER "write: rho $tag" begin
+                    rho = physical_rdm(s.psi, L, wires; maxwires = maxwires)
+                    # Shuffle + deflate: measured 15x (cold) to 200x (warm)
+                    # on the ncas = 10 exports, which are 88% of the file --
+                    # the warm rho is near-diagonal and all-but-vanishes.
+                    # Transparent to every reader; h5py inflates on read.
+                    d = create_dataset(
+                        b, "rho", datatype(Float64), dataspace(size(rho));
+                        chunk = size(rho), shuffle = true, deflate = 4
+                    )
+                    write(d, rho)
+                end
                 b["rho_wires"] = wires
             end
             attributes(b)["complete"] = true

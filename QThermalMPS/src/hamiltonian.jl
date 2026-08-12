@@ -48,13 +48,21 @@ function qc_opsum(
     # 0-based wire -> 1-based chain position, precomputed
     wire = [[wirepos(jw_wire(p, s, ncas, ordering)) for p in 0:(ncas - 1)] for s in 0:1]
 
+    return @timeit TIMER "setup: H opsum" _qc_opsum(h1, g, ncas, wire, tol)
+end
+
+function _qc_opsum(h1, g, ncas, wire, tol)
     os = OpSum()
 
+    # `ITensorMPS.add!`, NOT `os += ...`: += copies the whole OpSum per term,
+    # which is quadratic in the O(ncas^4) term count -- measured 38.5 s and
+    # 131 GiB of churn at ncas = 12, and ~40 min extrapolated at ncas = 20.
+    # add! appends in place (83x at 20k terms) and builds the identical OpSum.
     @inbounds for p in 1:ncas, q in 1:ncas
         c = h1[p, q]
         abs(c) < tol && continue
         for s in 1:2
-            os += c, "Cdag", wire[s][p], "C", wire[s][q]
+            ITensorMPS.add!(os, c, "Cdag", wire[s][p], "C", wire[s][q])
         end
     end
 
@@ -67,7 +75,7 @@ function qc_opsum(
             # a+_p a+_r a_s a_q vanishes identically when the two creators
             # (or the two annihilators) are the same spin-orbital.
             (wp == wr || wq == ws) && continue
-            os += c, "Cdag", wp, "Cdag", wr, "C", ws, "C", wq
+            ITensorMPS.add!(os, c, "Cdag", wp, "Cdag", wr, "C", ws, "C", wq)
         end
     end
 
@@ -122,14 +130,15 @@ function build_mpo(
         cutoff::Float64 = 1.0e-15, check::Bool = false
     )
     if alg === :fast
-        return MPO_new(
+        return @timeit TIMER "setup: H compile (MPO_new)" MPO_new(
             os, sites;
             alg = graph_alg,
             basis_op_cache_vec = op_basis(sites),
             check_for_errors = check, checkflux = check
         )
     end
-    alg === :itensor && return MPO(os, sites; cutoff = cutoff)
+    alg === :itensor &&
+        return @timeit TIMER "setup: H compile (itensor)" MPO(os, sites; cutoff = cutoff)
     throw(ArgumentError("unknown MPO alg $alg (:fast or :itensor)"))
 end
 
@@ -217,5 +226,5 @@ function purification_mpo(
         tol::Float64 = 1.0e-14, kwargs...
     )
     Hp = physical_mpo(h1, g, L, physical_indices(L, sites); tol = tol, kwargs...)
-    return inflate_mpo(Hp, L, sites)
+    return @timeit TIMER "setup: H inflate" inflate_mpo(Hp, L, sites)
 end
