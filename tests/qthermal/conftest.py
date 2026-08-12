@@ -8,15 +8,8 @@ Kohn-Sham matrices and the `detect_units` physicality window (HOMO-LUMO gap in
 gap and would fail its own criteria even in the correct unit.
 """
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 H2O_ATOM_ANGSTROM = "O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692"
 

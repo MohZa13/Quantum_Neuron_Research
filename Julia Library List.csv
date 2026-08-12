@@ -1,0 +1,24 @@
+LibraryName,Application,About,Maintenence,Developed,Link
+ITensor,Numerical/Tensor,Efficient representation of Tensors in Julia,,Miles Stoudenmire,https://docs.itensor.org/ITensorMPS/stable/index.html
+ITensorMPS,Numerical/Tensor,MPS and MPO methods based on ITensor (ITensors.jl). ITensorMPS.jl is supported by the Simons Foundation's Flatiron Institute.,WIthin Last few Months,,
+ITensorNetworks,Numerical/Tensor,A package with general tools for working with higher-dimensional tensor networks based on ITensor.,Pre-Release,Flatiron Institute,
+ITensorAlgebra,Numerical/Tensor,Tensor Algebra package on top of ITensor.,Updated 3 days ago,Flatiron Institute,https://github.com/ITensor/TensorAlgebra.jl
+Yao,Q. Computing,,,,https://yaoquantum.org
+Zygote,Numerical/Tensor,extends the Julia language to support differentiable programming. With Zygote you can write down any Julia code you feel like – including using existing Julia packages – then get gradients and optimise your program,,,
+OMEinsumContraction Orders,Numerical/Tensor,Tensor network contraction order optimizers (not only) for OMEinsum,,,https://github.com/TensorBFS/OMEinsumContractionOrders.jl
+OptimKit,Optimization,"OptimKit: A blissfully ignorant Julia package for gradient optimization
+",,,
+QuantumCircuitOpt,Optimization,Provably Optimal Quanyum Circuit Design,,,https://github.com/harshangrjn/QuantumCircuitOpt.jl
+BPGates,Physical Simulation,"Entanglement Simulation on real, non-ideal Quantum Computers",,,
+GABS,Q. Info,Gaussian Quantum Information Simulator,,,
+QuantumToolbox,,"Statebvector simulations, supporting package for GABS. Useful for Quantum Fisher Information",,,
+Rimu,,Exact diagonalization and stochastic sampling. Can perform Quantum Monte Carlo Sampling of inf. dimensional Fock Space,,,
+ElemCo,,Can simulate Quantum Chemistry with molecular Hamiltonian,Google Summer of Code,,
+MonteCarlo,,"Monte Carlo simulation for physical systems, compatible with pyplot.",,,
+DFTK,,"Automatic Differentiation for Quantum Electronic Structure. Useful for 1-D problems, Toy models for rigorous analysis, and DFT > 800 ELectrons",,,
+TwoBody,,Two Body Problem Simulations,,,
+Finch,,Flexible & Efficient sparse tensor programming.,MIT,,
+Quasar,,,,,
+Qasm3,,,,,
+Quiqbox,,"Gausslets, Molecular Hamiltonians, Tensor Network Methods.",,,
+cMPO.py,Numerical/Tensor,continuous-time matrix product operator for finite temperature quantum states,,,https://github.com/TensorBFS/OMEinsumContractionOrders.jl

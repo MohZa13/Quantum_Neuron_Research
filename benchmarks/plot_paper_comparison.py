@@ -13,10 +13,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-import sys as _sys
-from pathlib import Path as _Path
-
-_sys.path.insert(0, str(_Path(__file__).resolve().parent.parent / "tests"))
 from notebook_test_utils import REPO_ROOT
 
 

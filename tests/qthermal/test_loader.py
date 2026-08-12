@@ -118,3 +118,44 @@ def test_iter_records_limit(tmp_path, h2o_record):
     db = tmp_path / "QH9Stable.db"
     _make_synthetic_qh9_db(db, h2o_record)
     assert list(iter_records(db, limit=0)) == []
+
+
+def _make_multi_row_db(path, record, ids):
+    """Same schema, one identical record per id — enough to test selection."""
+    _make_synthetic_qh9_db(path, record)
+    with sqlite3.connect(path) as conn:
+        conn.execute("delete from data")
+        conn.executemany(
+            "insert into data (id, N, Z, pos, Ham) values (?, ?, ?, ?, ?)",
+            [(i, len(record.Z),
+              record.Z.astype(np.int32).tobytes(),
+              record.R.astype(np.float64).tobytes(),
+              record.F.astype(np.float64).tobytes()) for i in ids])
+        conn.commit()
+
+
+def test_iter_records_indices_selects_ids_in_order(tmp_path, h2o_record):
+    db = tmp_path / "QH9Stable.db"
+    _make_multi_row_db(db, h2o_record, ids=[0, 1, 2, 5, 9])
+
+    got = [r.idx for r in iter_records(db, indices=[9, 2, 5])]
+    assert got == [2, 5, 9]                     # ascending id order, not input
+    # duplicates collapse, unknown ids are skipped, not errors
+    assert [r.idx for r in iter_records(db, indices=[5, 5, 1234])] == [5]
+    assert list(iter_records(db, indices=[])) == []
+    # --limit applies on top of the selection
+    assert [r.idx for r in iter_records(db, indices=[0, 1, 2, 5],
+                                        limit=2)] == [0, 1]
+    # unchanged default behaviour
+    assert [r.idx for r in iter_records(db)] == [0, 1, 2, 5, 9]
+
+
+def test_iter_records_indices_chunks_past_sqlite_variable_limit(tmp_path,
+                                                               h2o_record):
+    """Selections larger than the per-query variable cap must still work."""
+    ids = list(range(0, 3600, 2))
+    db = tmp_path / "QH9Stable.db"
+    _make_multi_row_db(db, h2o_record, ids=ids)
+    wanted = ids[::3]
+    assert len(wanted) > 500                    # spans several query chunks
+    assert [r.idx for r in iter_records(db, indices=wanted)] == wanted

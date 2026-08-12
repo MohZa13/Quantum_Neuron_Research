@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qthermal"
+version = "0.1.0"
+description = "QH9 Fock matrices to interacting quantum thermal states, and the Fermi-Dirac classifier that consumes them"
+readme = "README.md"
+requires-python = ">=3.12"
+
+# Loose ranges: what the code actually needs to import and run.
+# For bit-level reproduction of published numbers use requirements.lock instead.
+dependencies = [
+    # pipeline core
+    "numpy>=2.0,<3",
+    "scipy>=1.14,<2",
+    "h5py>=3.11,<4",
+    "pyscf>=2.13,<3",
+    # classifier / benchmarks / figures
+    # PennyLane breaks API across minors and lightning must match it exactly.
+    "pennylane>=0.45,<0.46",
+    "pennylane-lightning>=0.45,<0.46",
+    "matplotlib>=3.9,<4",
+    "pandas>=2.2,<4",
+    "tqdm>=4.66",
+    "pillow>=10",
+]
+
+[project.optional-dependencies]
+# Tier-3 conjugation screening only; scripts/screen_conjugation.py imports it
+# lazily and degrades to Tiers 1-2 when absent.
+screening = ["rdkit>=2024.3"]
+dev = ["pytest>=8"]
+
+[tool.setuptools]
+# Explicit: this is a flat layout with many non-package top-level directories
+# (tests, scripts, benchmarks, figures, data, docs, notebooks, results, Papers),
+# which setuptools auto-discovery refuses to disambiguate.
+packages = ["qthermal", "qnn"]
+py-modules = ["notebook_test_utils"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

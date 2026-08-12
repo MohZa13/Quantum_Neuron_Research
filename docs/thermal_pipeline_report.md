@@ -2,6 +2,18 @@
 
 *Status as of 2026-07-15.*
 
+> **⚠️ Point-in-time snapshot — superseded counts below.** This report was
+> written at the 50-molecule stage. As of 2026-08-05 the production set is
+> **1000 molecules** (`results/qh9_dense_cas8-8_kT0p1.h5`, 45.4 GB), the test
+> suite is **156 tests**, and Module J (purification MPS) has been added.
+>
+> The *physics* and the *interpretations* here remain accurate — including the
+> kT-regime finding and the caveats — and the 50-molecule findings in §"What
+> has been produced" were not re-derived at 1000 molecules, so treat them as
+> the 50-molecule result they are. For current state see
+> [`../AGENTS.md`](../AGENTS.md) §6, [`DATA_CATALOG.md`](DATA_CATALOG.md), and
+> [`RESEARCH_LOG.md`](RESEARCH_LOG.md).
+
 ## What we are building, and why
 
 The goal is a labeled dataset of **quantum thermal states of real molecules**,

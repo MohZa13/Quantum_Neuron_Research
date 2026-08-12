@@ -169,3 +169,18 @@ def test_relative_kT_requires_dense(synthetic_db, tmp_path):
 def test_max_nroots_parser_default():
     args = build_parser().parse_args(["--qh9-path", "x.db", "--out", "y.h5"])
     assert args.max_nroots == 512
+
+
+def test_parse_indices_forms():
+    from qthermal.run import parse_indices
+    assert parse_indices(None) is None
+    assert parse_indices("3,1,2") == [1, 2, 3]
+    assert parse_indices("0-4") == [0, 1, 2, 3, 4]
+    assert parse_indices("7, 0-2 ,7") == [0, 1, 2, 7]
+
+
+def test_parse_indices_from_file(tmp_path):
+    from qthermal.run import parse_indices
+    path = tmp_path / "ids.txt"
+    path.write_text("5\n3\n9,11\n")
+    assert parse_indices(f"@{path}") == [3, 5, 9, 11]

@@ -7,6 +7,15 @@ benchmark results live in `scaling_comparison.md` and
 `paper_comparison_guide.md`; the code of record is
 `figures/quantum_training_impls.py` and `notebooks/pennylane/`.
 
+> **Scope: the SINGLE neuron.** Everything below assumes the loss is applied to
+> the Hamiltonian by functional calculus, which is what makes it linear in each
+> `ρ_m` and lets `R±` collapse the dataset once, before training. The hybrid
+> **network** ([`HYBRID_BACKPROP.md`](HYBRID_BACKPROP.md), [`qnn/`](../qnn/README.md))
+> breaks that assumption: its loss is nonlinear in `ρ_m`, so optimization #3 and
+> #4 below do not carry over unchanged. What survives is a per-neuron aggregate
+> re-formed each epoch, which still makes bottleneck #2 — the eigendecomposition
+> — independent of dataset size. See `qnn/README.md`'s cost table.
+
 ## Bottleneck analysis (June 2026, still accurate)
 
 Per epoch, for n qubits, p Pauli parameters, and Ns training states:

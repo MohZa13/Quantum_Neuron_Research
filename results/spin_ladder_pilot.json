@@ -1,0 +1,213 @@
+{
+  "system": "C2H4 torsion scan, B3LYP/def2-SVP orbitals, CASCI(8,8)",
+  "note": "`screen_ratio` is ||offdiag(rho_S - rho_T)||_F / ||diag(rho_S - rho_T)||_F -- the same statistic as the R+/R- screen, here between the singlet and triplet classes at one fixed composition. QH9's median-split HOMO-LUMO gap gives 0.1345 over 1000 molecules.",
+  "rows": [
+    {
+      "angle": 0,
+      "scf_converged": true,
+      "E_singlet": -74.76905916533994,
+      "E_triplet": -74.66889232130208,
+      "ST_gap_eV": 2.7256786575158567,
+      "s2_roots": [
+        1.6480150577535824e-12,
+        1.9999999999993905,
+        7.428724302371847e-12
+      ],
+      "root_used": 0,
+      "ST_gap_same_sector_eV": 2.725678657449345,
+      "offdiag_share_singlet": 0.1021609413891446,
+      "offdiag_share_triplet": 0.5927740348270587,
+      "screen_ratio": 0.7297195974651022,
+      "diag_overlap": 4.476413418030214e-28,
+      "leading_weights": [
+        0.9470431419989471,
+        0.02959219441671225,
+        0.007444510959686317
+      ]
+    },
+    {
+      "angle": 15,
+      "scf_converged": true,
+      "E_singlet": -76.19406188118288,
+      "E_triplet": -76.13784906112784,
+      "ST_gap_eV": 1.5296287446664107,
+      "s2_roots": [
+        2.574385149500813e-12,
+        2.000000000000463,
+        1.0853318244130605e-11
+      ],
+      "root_used": 0,
+      "ST_gap_same_sector_eV": 1.5296287446707126,
+      "offdiag_share_singlet": 0.10350225537863605,
+      "offdiag_share_triplet": 0.5500973912839892,
+      "screen_ratio": 0.696736874355624,
+      "diag_overlap": 7.028218613864362e-28,
+      "leading_weights": [
+        0.9464251442552382,
+        0.026517417778764357,
+        0.007170775610138784
+      ]
+    },
+    {
+      "angle": 30,
+      "scf_converged": true,
+      "E_singlet": -76.9315372383878,
+      "E_triplet": -76.95019039796598,
+      "ST_gap_eV": -0.5075783254013212,
+      "s2_roots": [
+        1.9999999999999956,
+        2.547295707699959e-12,
+        1.1439738045737613e-11
+      ],
+      "root_used": 1,
+      "ST_gap_same_sector_eV": -0.5075783254020946,
+      "offdiag_share_singlet": 0.5713324339911308,
+      "offdiag_share_triplet": 0.5678090130555028,
+      "screen_ratio": 291.9226654108848,
+      "diag_overlap": 0.9999811138690536,
+      "leading_weights": [
+        0.4625379981010815,
+        0.4625379534896205,
+        0.017908410936228903
+      ]
+    },
+    {
+      "angle": 45,
+      "scf_converged": true,
+      "E_singlet": -77.18813772184843,
+      "E_triplet": -77.15382449694519,
+      "ST_gap_eV": 0.9337104077472166,
+      "s2_roots": [
+        8.65529869997772e-13,
+        1.9999999999999034,
+        1.9999999999925644
+      ],
+      "root_used": 0,
+      "ST_gap_same_sector_eV": 0.9337104077275433,
+      "offdiag_share_singlet": 0.08940902414149074,
+      "offdiag_share_triplet": 0.548463347364308,
+      "screen_ratio": 0.6843180492398662,
+      "diag_overlap": 2.789070602649925e-29,
+      "leading_weights": [
+        0.9541665973953791,
+        0.009331306750173692,
+        0.004718374375520991
+      ]
+    },
+    {
+      "angle": 60,
+      "scf_converged": true,
+      "E_singlet": -77.28316081473635,
+      "E_triplet": -77.25800667951322,
+      "ST_gap_eV": 0.6844788830528148,
+      "s2_roots": [
+        1.7497114868092467e-13,
+        1.9999999999862283,
+        1.9999999999960276
+      ],
+      "root_used": 0,
+      "ST_gap_same_sector_eV": 0.684478883060452,
+      "offdiag_share_singlet": 0.09099959817933266,
+      "offdiag_share_triplet": 0.5242540643760438,
+      "screen_ratio": 0.6665642100291357,
+      "diag_overlap": 9.531598691597875e-12,
+      "leading_weights": [
+        0.9533139776478765,
+        0.010588027345020906,
+        0.00616070018838151
+      ]
+    },
+    {
+      "angle": 70,
+      "scf_converged": true,
+      "E_singlet": -77.30468454489461,
+      "E_triplet": -77.29768967578707,
+      "ST_gap_eV": 0.19034008330509364,
+      "s2_roots": [
+        4.556355293061642e-13,
+        1.999999999911177,
+        1.9999999999999072
+      ],
+      "root_used": 0,
+      "ST_gap_same_sector_eV": 0.19034008343995426,
+      "offdiag_share_singlet": 0.11159562672423158,
+      "offdiag_share_triplet": 0.523300846543798,
+      "screen_ratio": 0.6819753274566176,
+      "diag_overlap": 1.3107762951161586e-11,
+      "leading_weights": [
+        0.9422787779335483,
+        0.02103016607367743,
+        0.004732348474031526
+      ]
+    },
+    {
+      "angle": 80,
+      "scf_converged": true,
+      "E_singlet": -77.30734253678206,
+      "E_triplet": -77.31840674706372,
+      "ST_gap_eV": -0.3010724967593176,
+      "s2_roots": [
+        2.0000000000015756,
+        1.9999999999993225,
+        2.313704783318826e-13
+      ],
+      "root_used": 2,
+      "ST_gap_same_sector_eV": -0.30107249672533654,
+      "offdiag_share_singlet": 0.17544904597789926,
+      "offdiag_share_triplet": 0.5227581348743504,
+      "screen_ratio": 0.7323542728484556,
+      "diag_overlap": 1.2544379142577538e-12,
+      "leading_weights": [
+        0.9063256496718664,
+        0.055169824920137694,
+        0.00478224189296949
+      ]
+    },
+    {
+      "angle": 85,
+      "scf_converged": true,
+      "E_singlet": -77.30372977385578,
+      "E_triplet": -77.32306242414326,
+      "ST_gap_eV": -0.5260682093756592,
+      "s2_roots": [
+        2.000000000002187,
+        1.9999999999993752,
+        7.904787935331115e-14
+      ],
+      "root_used": 2,
+      "ST_gap_same_sector_eV": -0.5260682093493155,
+      "offdiag_share_singlet": 0.25986755793955235,
+      "offdiag_share_triplet": 0.522487518051063,
+      "screen_ratio": 0.8015703069598088,
+      "diag_overlap": 5.486209313703024e-14,
+      "leading_weights": [
+        0.8533513782180784,
+        0.10883112813411022,
+        0.0051622594352477335
+      ]
+    },
+    {
+      "angle": 90,
+      "scf_converged": true,
+      "E_singlet": -77.28431112587447,
+      "E_triplet": -77.32037838801617,
+      "ST_gap_eV": -0.9814401921013594,
+      "s2_roots": [
+        1.9999999999966962,
+        1.999999999999956,
+        1.2170708885150816e-11
+      ],
+      "root_used": 2,
+      "ST_gap_same_sector_eV": -0.9814401920562608,
+      "offdiag_share_singlet": 0.5421791394098584,
+      "offdiag_share_triplet": 0.5317749621746454,
+      "screen_ratio": 1.0769030431913107,
+      "diag_overlap": 8.037941739379543e-23,
+      "leading_weights": [
+        0.47838686060900354,
+        0.4783866377781976,
+        0.0049014616465635225
+      ]
+    }
+  ]
+}

@@ -1,5 +1,20 @@
 # PennyLane Integration Quick Reference
 
+> **⚠️ Largely superseded — historical planning document.** The "Phases" below
+> are proposals from before the work was done, and their status is now:
+>
+> | Section | Actual status |
+> |---|---|
+> | Phase 2 — symbolic Hamiltonian | **Done.** `logloss_pennylane.ipynb` cell 5 |
+> | Phase 3 — vectorized divided-difference | **Done and superseded** by label aggregation (`R±`), which removes the sample loop entirely |
+> | Phase 4 — JAX backend | **Deferred.** `resolve_array_backend` leaves the seam open; no GPU backend wired in |
+> | "Migrate to PennyLane QNodes / parameter-shift" | **Deliberately not adopted** — the loss is a *spectral* function of H(ω), not a circuit expectation ([`DECISIONS.md`](DECISIONS.md) D6) |
+>
+> Current, accurate accounts: [`classifier_optimization.md`](classifier_optimization.md)
+> (what was optimized and what was skipped) and [`scaling_comparison.md`](scaling_comparison.md)
+> (measured results). Kept for its debugging/profiling snippets and paper
+> equation references.
+
 ## Quick Start
 
 Your notebook now has **optimized gradient computation** enabled by default. To run a full training:

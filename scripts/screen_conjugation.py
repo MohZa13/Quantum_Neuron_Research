@@ -29,17 +29,13 @@ import argparse
 import csv
 import logging
 import os
-import sys
 from pathlib import Path
 
 import numpy as np
 import scipy.linalg
 
-# Allow running as a plain script (python scripts/screen_conjugation.py) too.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from qthermal.loader import CachedUnitDetector, iter_records  # noqa: E402
-from qthermal.orbitals import build_mol, overlap  # noqa: E402
+from qthermal.loader import CachedUnitDetector, iter_records
+from qthermal.orbitals import build_mol, overlap
 
 logger = logging.getLogger("screen_conjugation")
 

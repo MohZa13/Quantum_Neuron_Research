@@ -13,6 +13,463 @@ Template: [`templates/FINDING.md`](templates/FINDING.md).
 
 ---
 
+## 2026-08-11 — **cutoff 1e-8 cannot reach chemical accuracy at ANY bond dimension (per-rung floors +2.2e-3..+7.7e-3, chi-independent) — and the pipeline is now open-shell (S_z != 0) capable, validated to exact references**
+
+**A. The 1e-8 floor test** (diimine CAS(10,10), caps 100..500, full ladders,
+vs the converged 1e-10/chi = 500 reference from the previous entry):
+
+| kT | natural chi(1e-8) | error floor | status |
+|---|---|---|---|
+| 4 | 34 (inert from cap 100) | +2.2e-3 | chi-independent, exceeds bar |
+| 2 | 95 (inert) | +6.7e-3 | chi-independent, exceeds |
+| 1 | 160 (inert) | +7.7e-3 | chi-independent, exceeds |
+| 0.5 | 381 (inert) | +7.1e-3 | chi-independent, exceeds |
+| 0.25 | >= 500 (cap-bound) | +3.2e-3 and decelerating | extrapolated floor ~+3e-3 |
+| 0.1 | >= 500 (cap-bound) | drifting −1.1e-3 -> −2.0e-3 | converging to a BIASED point |
+
+The mid-ladder floors are locked at their natural chi — raising the cap
+cannot touch them because the cap is not what is binding; the 1e-8 SVD step
+itself discards the weight that carries the last few mHa. The coldest rung
+crosses zero (chi = 400) then overshoots negative — a zero-crossing of a
+biased estimator, not convergence. **Chemical accuracy requires cutoff
+<= 1e-10; at 1e-8 no chi budget rescues it.** Costs for the record:
+659-1497 s per ladder (caps 100-500) — the cheapness is real, the accuracy
+class is capped. Error-vs-cost menu on this molecule now fully measured:
+1e-6 -> ~1e-1 Ha at ~7 min; 1e-8 -> ~2-8e-3 at ~11-25 min; 1e-10/chi500 ->
+certified 1.6e-3 at ~1.7 h.
+
+**B. Open-shell enablement** (S_z != 0). Audit: the entire MPS layer was
+already (nalpha, nbeta)-general — both layouts, QN flux (`sector_flux`
+carries Sz = nalpha − nbeta), the pair-raise psi0, `sector_mean_energy`, the
+dense test references. The single blocker was `read_case`'s S_z = 0 file
+contract; it now honors `nalpha`/`nbeta` meta attributes (open shell, odd
+nelecas OK) with byte-identical behavior for legacy files. Validated:
+
+- New `test/test_openshell.jl` gate: flux/dims/closed-form at (3,2,1),
+  (4,3,1), (2,1,0); ladder + physical_rho + physical_rdm vs dense
+  exp(-beta H) at (3,2,1); zipup expansion open-shell; fused backend
+  open-shell; schema round-trip incl. legacy fallback and inconsistency
+  errors. (Full suite green, see below.)
+- End-to-end on a REAL radical: allyl (C3H5 doublet), ROHF/def2-SVP
+  CASCI(3,3) (2,1) via `build_allyl_openshell.py`-style exporter; through
+  the production CLI: beta = 0 guard = sector mean to 10 digits, E(kT = 1)
+  and E(kT = 0.25) match exact FCI to 1-3e-5 (= the dbeta^2 level), chi = 9
+  = full sector (exact), RDM export fine.
+
+Computational implications of open shell, for planning: (i) cost class
+unchanged (same chain, same MPO scaling; QN blocks merely asymmetric);
+(ii) upstream is the real limitation — QH9 is a closed-shell dataset and
+Phase 1 is RHF-CASCI, so open-shell inputs come from custom ROHF exporters
+(`make_injected_rhf` is RHF-specific by design); (iii) physics: only U(1)
+S_z is conserved, not SU(2) S^2 — the ladder prepares the S_z-canonical
+ensemble, mixing all multiplets reachable at that S_z; S-resolved states
+would need SU(2) MPS (out of scope); (iv) expect systematically LARGER chi
+for radicals at matched accuracy: odd-electron Kramers degeneracy and
+open-shell multiplets produce flat Schmidt blocks — the worst case for
+truncation (see the 2026-08-11 theory notes).
+
+**Parallelization for larger frameworks** (requested): the pipeline is
+embarrassingly parallel at three levels — per molecule (independent CLI
+processes; the per-molecule loop has no cross-talk), per chi-cap/cutoff in
+convergence studies (independent runs; this campaign ran them serially only
+to keep wall-time measurements clean), and per kT ONLY ACROSS ladders (a
+single ladder's rungs are inherently sequential — one imaginary-time flow).
+Within a run, ITensor block-sparse threading saturates at ~4x on 8 cores;
+scale-out should therefore be process-level: N molecules x M settings as a
+job array, ~10-55 GB RSS per process depending on chi (measured), no
+inter-process communication. `--warmup` amortizes JIT per process.
+
+---
+
+## 2026-08-11 — **chi-convergence protocols on the diimine: chemical accuracy at CAS(10,10) certified at chi = 500 / cutoff 1e-10; a 1e-6 SVD cutoff floors accuracy at 1e-2–1.7e-1 Ha and makes chi caps >= 66 inert**
+
+Two commissioned convergence studies on hexa-2,4-diene-1,6-diimine
+(`scripts/build_diimine_probe.py` integrals; full ladders kT = 4→0.1, dbeta
+0.05, zipup expansion, tuned solver; guard = closed form at every run).
+
+**A. cutoff 1e-6, CAS(12,12), caps 100–500 (user-directed):** the caps NEVER
+bind — natural chi at this cutoff is 12/12/12/13/22/66 down the ladder, so
+caps 100/200/300 produced digit-identical ladders (400/500 canceled as
+provably redundant). Point of convergence = chi* = 66, the natural cold-rung
+chi, where cap-convergence is exact but vacuous. A binding sweep (caps
+16–64) shows non-monotone approach (thermal TDVP is not variational) with
+|dE| = 6.0e-5 even at 64→66. Absolute cost of the 1e-6 floor vs the 1e-8
+production run: +2.1e-2 (kT=4) to **+1.7e-1 (kT=0.5)**, and at kT=0.1 the
+energy lands 6.2e-2 BELOW with an entropy deficit of **−0.98** — loose
+truncation sheds low-weight/high-energy components and mimics extra cooling;
+the S deficit, not dE, is the honest damage metric. A 1e-6 accuracy bar and
+a 1e-6 cutoff are mutually exclusive. Runs cost ~7–12 min/molecule.
+
+**B. cutoff 1e-10 (the measured chemical-accuracy truncation: 1e-8→~1e-2,
+1e-9→~6e-3, 1e-10→~1e-3), CAS(10,10), caps 100..500, bar 1.6e-3:**
+
+| cap | wall | E error vs chi=500, per kT (4 / 2 / 1 / 0.5 / 0.25 / 0.1), Ha |
+|---|---|---|
+| 100 | 829 s | 0 / 1.1e-3 / 5.3e-3 / 1.6e-2 / 3.4e-2 / 4.0e-2 |
+| 200 | 1,402 s | 0 / 2.6e-6 / 1.3e-3 / 4.9e-3 / 1.2e-2 / 1.9e-2 |
+| 300 | 2,434 s | 0 / 0 / 1.1e-4 / 8.7e-4 / 3.0e-3 / 2.6e-3 |
+| 400 | 3,860 s | 0 / 0 / 2.5e-5 / 2.4e-4 / 1.0e-3 / 9.6e-4 |
+| 500 | 6,024 s | **converged**: 400→500 worst \|dE\| = 1.01e-3 < 1.6e-3 at every rung |
+
+- **CONVERGED at chi = 500** by the bracketing-pair criterion; geometric
+  tail (ratio ~0.4–0.5 per +100) puts the chi = 500 residual at ~1e-3.
+- Natural chi per rung at 1e-10: kT = 4: 76 (cap-inert everywhere); kT = 2:
+  270 (exactly converged from cap 300); kT <= 1: still cap-bound at 500 —
+  convergence is by criterion, not cap-inertness. Per-rung chi budgeting
+  (warm rungs need far less) is the obvious cost lever for production.
+- TDVP steps are 57 at EVERY cap — step count is schedule-set, chi-blind.
+- Cost grows ~chi^1.2 at this cutoff (dense-block regime; contrast the
+  chi-sublinear 1e-8 block-bound regime).
+- The old production protocol (cutoff 1e-8, cap 256) measured against this
+  converged reference: +2.6e-3 (kT=0.1) to +6.1e-3 (kT=0.5) on this
+  molecule at ncas = 10 — just outside chemical accuracy, as long suspected.
+- Caveat: dbeta = 0.05 discretization is common-mode across caps (cancels
+  in the convergence criterion) but enters the absolute number; a dbeta/2
+  certification at chi = 500 would close it.
+
+**Protocol recommendation**: cutoff 1e-10 + ascending-cap bracketing pairs
+at 1.6e-3 (or the target bar) per rung; expect chi* ~ 500 at CAS(10,10) for
+conjugated systems, ~1.7 h/molecule on 8 threads — 4.4x the 1e-8 production
+cost, 15x the 1e-6 quick-look cost, for states certified rather than
+upper-bound.
+
+---
+
+## 2026-08-11 — **ncas-scaling probe (CAS(10,10)→CAS(18,18), hexa-2,4-diene-1,6-diimine): ladder cost grows ~ncas^4.4 at a fixed chi cap, not linearly — entanglement converts into truncation error, not wall time. Two large-ncas fixes instituted: linear OpSum build, zipup-bounded expansion**
+
+**The molecule.** Hexa-2,4-diene-1,6-diimine (HN=CH-CH=CH-CH=CH-CH=NH,
+C6H8N2, DoU 4, fully conjugated 8-atom pi chain) is NOT in QH9 Stable —
+verified by geometry-derived topology on all 224 C6H8N2 records: none is an
+unbranched N-terminated chain. Built at QH9's level of theory:
+`scripts/build_diimine_probe.py` (RDKit ETKDG+MMFF94 geometry, best of 12
+conformers, seed 7; B3LYP/def2-SVP single point; 152 AOs, 58 electrons, gap
+0.15125 Ha). Deviation from QH9: MMFF geometry, not DFT-optimized (no DFT
+optimizer in the env) — fine for a timing/entanglement probe. Frontier
+active-space integrals exported solver-free for ncas = 10..20 (sectors
+63,504 → 3.4e10) and validated against the closed-form sector-mean energy —
+exact (1e-14) at every probed size via the new self-reporting beta = 0 guard.
+
+**Measured, full production ladder (kT = 4,2,1,0.5,0.25,0.1; dbeta 0.05,
+cutoff 1e-8, tuned solver, split backend, 8 threads):**
+
+| ncas | sector | cap chi | ladder total | ratio | per-step @cap (kT=0.1) | S(kT=0.1) | peak RSS |
+|---|---|---|---|---|---|---|---|
+| 10 | 6.4e4 | 256 | 1,374 s | — | 20.9 s | 5.10 | — |
+| 12 | 8.5e5 | 256 | 2,464 s | 1.79 | 40.0 s | 5.90 | 34.7 GB* |
+| 14 | 1.2e7 | 256 | 4,410 s | 1.79 | 74.9 s | 7.55 | 25.0 GB |
+| 16 | 1.7e8 | 256 | 8,615 s | 1.95 | 141.0 s | 8.37 | 49.6 GB |
+| 16 | 1.7e8 | 128 | 7,412 s | (x1.162 vs 256) | 111.6 s | 7.81 | 52.4 GB* |
+| 18 | 2.4e9 | 128 | 15,559 s | 2.10 | 375.2 s | 7.37 | 29.4 GB |
+
+(*GC-heap-inflated; RSS here is Julia's heap high-water, not the tensor
+working set. ncas = 18 spliced to a chi = 256 equivalent via the ncas = 16
+cross-calibration: ~18,100 s ≈ 5.0 h. ncas = 20 canceled mid-campaign by
+request after ~9 h projected; its integrals file is ready and validated.)
+
+- **The "linear in active space" premise fails decisively**: 1.8x the
+  orbitals costs 13x the time (10 → 18). Log-log slope accelerates 3.2 →
+  3.8 → 5.0 → 6.3 per interval; overall t ~ ncas^4.4 over the range — at a
+  FIXED chi cap, where entanglement growth cannot even express itself as
+  time.
+- **Decomposition**: TDVP steps are schedule-fixed (57 at every size); the
+  QC MPO bond is exactly w = ncas^2 + 3 (measured 103 → 403); chain = 4 ncas
+  sites. Naive per-step cost N * w ~ ncas^3; measured per-step ~ ncas^4 —
+  the excess is QN-block-structure growth. At ncas = 18 the per-step cost
+  even grows ALONG the ladder (375 s/step at beta 4→10 vs 248 at beta 2→4,
+  same chi — flat at ncas <= 16).
+- **Entanglement shows up as chi demand and truncation, not (capped) time**:
+  cap onset moves kT = 0.5 (ncas <= 12) → kT = 1 (>= 14); S(kT = 0.1) climbs
+  5.10 → 8.37; at ncas = 16 E(kT = 0.1) moves 4.3e-2 between chi = 128 and
+  256 — neither is converged, and the gap widens with ncas. These are
+  timing probes on upper-bound states; converged-accuracy cost would grow
+  strictly faster than the measured exponent (chi_needed grows with ncas on
+  top of per-chi cost).
+- Same-molecule anchor vs mol_3 (acetylene, ncas = 10, matched settings):
+  identical wall (1,374 vs 1,411 s) but chi trajectory 36/105/161/256^3 vs
+  19/38/64/248/256^2 — the diimine's extra entanglement is absorbed
+  entirely by the cap as extra truncation, the cost clamp in action.
+
+**Instituted fix 1 — OpSum construction was quadratic.** `os += term` copies
+the whole OpSum per term: 38.5 s + 131 GiB churn at ncas = 12, ~40 min
+extrapolated at ncas = 20 (and the GC pressure behind the "MPO compile
+explosion" misdiagnosis — `MPO_new` itself compiles 640k terms in 6.3 s).
+`_qc_opsum` now uses in-place `ITensorMPS.add!` (83x at 20k terms,
+closed-form-validated identical): full ncas = 20 setup is now ~6 s.
+
+**Instituted fix 2 — expansion is the large-ncas wall; zipup bounds it.**
+At ncas = 18 the library-default densitymatrix apply inside `expand` (a) OOM-
+killed the probe at 62.7 GB (intermediate ~ chi * w), and (b) had overtaken
+TDVP as the top cost (584-922 s vs 181-414 s per chunk). New opt-in
+`expand_apply_alg = "zipup"` (CLI `--expand-apply-alg zipup`) bounds the
+intermediate at ~2 chi: the rerun peaked at 29.4 GB, cut those chunks'
+expansion to 5-17 s, and reproduced the pre-OOM reference rungs to 6e-4
+(kT = 4) / 1.1e-2 (kT = 2) with slightly leaner chi (84 vs 96) — a
+disclosed, acceptable envelope for probes; default expansion unchanged for
+production continuity.
+
+**Practical reading for dataset work**: at current settings and hardware,
+ncas = 10-12 costs 23-41 min/molecule, ncas = 14 ~1.2 h, ncas = 16 ~2.4 h,
+ncas = 18 ~4-5 h — and those are cap-clamped, increasingly truncated states.
+The scalable path to larger actives is not raw ncas: it is per-step cost
+work (block coarsening, expansion strategy, the ~ncas^4 operator pipeline)
+plus accepting kT-dependent chi budgets per molecule.
+
+---
+
+## 2026-08-10 — **TDVP local solver was running Arnoldi at tol 1e-12 with no early exit: fixing the KrylovKit kwargs is a measured 4.9x on the dominant stage, at 1e-12-level accuracy cost** (`QThermalMPS`)
+
+Source reading after the profile: `ITensorMPS.tdvp` passes `updater_kwargs =
+(;)` to KrylovKit's `exponentiate`, whose stock defaults are wrong for this
+problem three independent ways — `issymmetric = false` (Arnoldi with full
+Gram-Schmidt for a real-symmetric H_eff), `eager = false` (all `krylovdim =
+30` Krylov vectors built before the FIRST convergence check, when these small
+imaginary-time steps need ~a handful), and `tol = 1e-12` (four orders below
+the 1e-8 truncation cutoff that owns the error budget).
+
+A/B on the STORED chi = 256, beta = 4 state (two steps of dbeta = 0.25, cap
+256, cutoff 1e-8; same machine state, sequential — absolute times are
+throttled ~2.4x vs the fresh-process profile, ratios are clean):
+
+| updater_kwargs | wall | speedup | dE vs base | 1−\|overlap\| |
+|---|---|---|---|---|
+| stock | 497.8 s | 1.0x | — | — |
+| issymmetric | 445.2 s | 1.12x | 5e-14 | 1e-15 |
+| eager | 129.8 s | **3.8x** | 8e-14 | 1e-15 |
+| sym+eager | 120.7 s | 4.1x | 1e-14 | 1e-15 |
+| sym+eager+tol 1e-9 | 102.3 s | **4.9x** | 2.5e-12 | 1e-15 |
+| sym+eager+tol 1e-8 | 91.4 s | 5.4x | 6e-12 | 1e-15 |
+| +krylovdim 12 | 101.1 s | 4.9x | (= tol 1e-9) | |
+
+Largest graded step (dbeta = 0.5): 243.4 -> 58.1 s, same 4.2x, dE 2e-12.
+`eager` is the whole story; `krylovdim` no longer matters once it is on.
+
+**Instituted as the package default** in `thermal_ladder`:
+`updater_kwargs = (; issymmetric = true, eager = true, tol = clamp(cutoff/10,
+1e-12, 1e-8))`; `--solver-tol none` recovers stock behavior.
+
+**Certified end-to-end** (fresh process, full production settings, same
+machine): molecule 6226.8 s -> **1411.4 s (4.41x)**; ladder 6084 -> 1265 s;
+per-step at chi = 256: 103 -> ~25 s; warm rungs 6.9-7.9x (the 30-vector
+Krylov waste was worst where blocks are small). Rung energies: kT >= 1 match
+the baseline to ~1e-7; kT <= 0.5 to ~1.1e-4 — not solver error (that is
+1e-12) but expansion-path divergence (chi 248 vs 246), an order below the
+1e-2 truncation envelope. Full suite 798/798 in 14m50s (its own ladders run
+~3x faster than the 45-min budget). JIT warmup 208 -> 138 s. rho compression
+certified on the artifact: 50.33 -> 3.43 MB/molecule (14.7x), unit trace,
+PSD, max elementwise drift vs baseline 1.2e-4 (cold rung, path noise).
+GC launch flags are a measured dead-end (28% GC time; `--heap-size-hint 16G`
+and `--gcthreads 8` within noise) — the churn is upstream in NDTensors.
+
+**The fused backend does NOT transfer to ncas = 10 and is flagged
+experimental there.** Measured on the identical production ladder: 1385 s
+(no end-to-end win — the capped cold stretch runs ~1.5x slower per step on
+dim-4 sites: 39.6 vs 25.4 s), and the warm/mid rungs land 3.6e-3 (kT = 4) to
+2-4e-2 (kT = 2..0.5) away from the twice-validated split energies — far
+outside the split pipeline's own settings-sensitivity envelope. Diagnosis so
+far: beta = 0 energy exact to 2e-14 against the closed form, ncas <= 4 fused
+ladders match dense exp(-beta H) (test suite), uncapping maxdim does not fix
+it, and dbeta refinement 0.05 -> 0.0125 moves E by only 1.4e-5 while staying
+3.6e-3 wrong — the exact trap-2 signature (silent misconvergence the
+step-size study cannot see). The expansion-strength scan completes the
+picture and is NON-MONOTONIC (kT = 4, maxdim 1024): no expansion +1.16e-2
+(chi 32), default expansion +3.6e-3 (chi 24), cranked expansion
+(krylovdim 4, expand_cutoff 1e-14, every 0.25) +9.7e-2 (chi 156; caveat:
+those knobs were never controlled on split, so the last point may partly be
+generic over-expansion noise). Reading: the fused chain's coarsened
+U(1)xU(1) block structure leaves the beta = 0 state's REACHABLE manifold
+deficient at ncas = 10 — two-site TDVP alone under-reaches, the default
+expansion only partially repairs it, and stronger expansion floods the
+manifold with junk directions instead. ncas <= 4 is too small to expose any
+of this, which is why the test suite passes. CAS(8,6)'s 1.37x does not
+generalize; production stays on `--backend split` until fused gets its own
+expansion treatment validated at ncas = 10 (open item; candidate approaches:
+sector-targeted expansion, or seeding the fused beta = 0 state with the
+missing blocks explicitly).
+
+**One-site TDVP at the pinned cap is NOT free and stays opt-in**
+(`nsite_capped = 1`, CLI `--nsite-capped`): beta 4 -> 5 at chi = 256 runs
+2.36x faster (232.7 -> 98.6 s) but drifts dE = +2.1e-4 per unit beta with
+linkdims diverging by up to 19 — the two-site sweep's QN-sector re-balancing
+is real work, not overhead. At production cutoff 1e-8 (truncation ~1e-2) the
+drift is an order below the existing error; for convergence studies leave it
+at 2.
+
+**Storage (measured, `qh9_mps_ncas10.h5`): ~57 MB/molecule for a 6-rung
+ladder, 88% of it the six uncompressed 1024x1024 rho exports** (8.39 MB
+each); the six MPS total ~7 MB (chi = 256 state = 2.5 MB). zlib-6 compresses
+rho 15x (cold) to 197x (warm; near-diagonal). Instituted: `write_ladder` now
+writes `rho` chunked + shuffle + deflate-4 — transparent to h5py readers;
+expect ~57 -> ~9 MB per molecule. Also instituted: `physical_rdm` silences
+the intentional order-20 warn (it was printing a stack trace per export), and
+mol_4 (HCN) confirms the chi sensitivity story in storage: chi = 256 already
+at kT = 1 vs mol_3's 64.
+
+---
+
+## 2026-08-10 — **mol_3 CAS(10,10) entanglement-vs-mixing ladder: classical mixture at kT >= 2, entanglement onset below kT = 1, quantum share 22% of the entropy scale by kT = 0.1** (stored states only)
+
+All quantities contracted from the stored production-equivalent states (the
+profiled rerun of `qh9_mps_ncas10.h5` mol_3 — identical rung energies): the
+dense 10-wire alpha-register rho per kT, the stored purification MPS (one
+gauge sweep for Schmidt spectra), and stored `logZ` via the identity
+`S_2(beta) = 2 logZ(beta) − logZ(2 beta)`. Nothing re-evolved.
+
+| kT | S_th | e^S_th | full purity / max-mixed | C_rel | offdiag Fro | logneg (occ\|virt in alpha) | I(alpha:beta) | I/S_th | S_pur(alpha\|beta cut) |
+|---|---|---|---|---|---|---|---|---|---|
+| 4 | 11.024 | 61,313 | 1.07 | 0.0006 | 3.2% | 0.002 | 0.0007 | 0.006% | 0.004 |
+| 2 | 10.923 | 55,436 | 1.30 | 0.0019 | 5.7% | 0.011 | 0.0054 | 0.05% | 0.015 |
+| 1 | 10.562 | 38,619 | 2.44 | 0.0063 | 9.0% | 0.060 | 0.0335 | 0.32% | 0.058 |
+| 0.5 | 9.478 | 13,066 | 12.4 | 0.0165 | 11.5% | 0.168 | 0.1335 | 1.4% | 0.176 |
+| 0.25 | 7.101 | 1,213 | — | 0.0271 | 11.4% | 0.268 | 0.2886 | 4.1% | 0.366 |
+| 0.1 | 2.322 | 10.2 | — | 0.0333 | 9.2% | 0.300 | 0.5040 | 21.7% | 0.424 |
+
+(S in nats; logneg in bits; purity ratio 1.0 = maximally mixed sector state;
+I(alpha:beta) = 2 S(rho_alpha) − S_th using S(rho_beta) = S(rho_alpha) by spin
+symmetry; occ|virt negativity is within the alpha register, wires 0-4|5-9.)
+
+- **kT >= 2 is a classical sector mixture to within a few percent**: 55-61k
+  effective states, full purity 1.07-1.30x the maximally-mixed floor, occ|virt
+  negativity ~1e-3, and the purification factorizes across spin (cut
+  entanglement 0.004-0.015).
+- **Entanglement switches on below kT ~ 1** (negativity 0.06 -> 0.30 bits) and
+  every inter-spin measure grows monotonically to the coldest rung.
+- **Basis-coherence measures peak mid-ladder** (offdiag Frobenius 11.5% at
+  kT = 0.5, C_l1 peaks at kT = 0.25) then fall as weight recondenses onto few
+  determinants (~4 effective diagonal configs at kT = 0.1), while C_rel and
+  negativity keep rising — coherence fraction and entanglement are NOT the
+  same axis, which matters for the Q1 label discussion.
+- **chi is spent inside the spin blocks, not across them**: max bond entropy
+  sits at bonds 9-11 (the occ|virt frontier of the alpha block, S ~ 1.87-1.92)
+  vs 0.42 and chi_cut = 62 at the alpha|beta boundary; mean bond entropy FALLS
+  from 1.24 to 0.59 nats along the ladder while chi stays pinned at 256 —
+  bond dimension tracks Schmidt tails at cutoff 1e-8, not entropy
+  (ln 256 = 5.5 vs max S 1.9).
+- Caveat: kT <= 0.5 rungs carry the known chi = 256 / cutoff 1e-8 truncation
+  (~1e-2 in E), so treat third decimals there as soft. Negativity across
+  alpha:beta itself is not computable from the 10-wire rho; I(alpha:beta) and
+  the purification cut cover that bipartition.
+
+This is exactly the "multi-temperature ladder per molecule" object the
+2026-08-09 pair-screen entry said Q1 needs — one molecule's full
+mixing-to-entanglement trajectory, from stored data alone.
+
+---
+
+## 2026-08-10 — **Where the ncas = 10 wall time actually goes: TDVP 90%, expansion 7% — the expansion hypothesis is refuted** (`QThermalMPS` `--profile`)
+
+The Module K pipeline is now instrumented end to end: every stage runs inside
+a `TimerOutputs` section (`QThermalMPS.TIMER`), and `bin/thermal.jl --profile 1`
+prints a per-molecule stage table plus a per-chunk `chi`/time trace.
+`--warmup` (default when profiling) first runs a tiny synthetic CAS(2,2)
+ladder so JIT compilation is not billed to the first molecule. Rerunning the
+production mol_3 CAS(10,10) ladder at its exact settings (kT = 4,2,1,0.5,0.25,0.1,
+dbeta 0.05, maxdim 256, cutoff 1e-8, 10-wire rho export) **reproduces all six
+rung energies digit for digit**, so the profile measured the production
+computation itself. On 8 threads, Julia 1.12.6:
+
+| stage | wall | share of molecule |
+|---|---|---|
+| read + full setup (opsum, MPO compile, inflate, psi0) + overflow guard | 5.9 s | 0.1% |
+| ladder: **tdvp** | **5620 s** | **90.3%** |
+| ladder: expand | 455 s | 7.3% |
+| rho export, 6 temperatures | 141 s | 2.3% |
+| psi writes + renormalise + snapshot energies | ~5 s | 0.1% |
+| **molecule total** | **6227 s (104 min)** | |
+| package load + JIT warmup (once per process) | 2.6 s + 208 s | |
+
+Per rung (expand / tdvp): kT = 4: 8/117 s · kT = 2: 16/119 s · kT = 1: 25/451 s
+· kT = 0.5: 149/1061 s · kT = 0.25: 257/1910 s · kT = 0.1: 0/1962 s. The cold
+half (kT ≤ 0.5) is 86% of the molecule.
+
+- **The README's standing claim "most of the wall time is the subspace
+  expansion, not TDVP" was an unmeasured hypothesis and is wrong** — TDVP
+  dominates every rung, 90.3% overall. (README corrected; this is the second
+  hypothesis in Module K overturned by direct measurement, after
+  interleaved-vs-blocked.)
+- **Per-TDVP-step cost is strongly sublinear in chi here**: ~24 s/step at
+  chi = 19, 64 s at chi = 64, ~103 s at chi = 256 — 1.6x for 4x chi, nowhere
+  near chi^3. The evolution is block-count/overhead-bound, not FLOP-bound
+  (8.7 TiB allocated over the ladder; effective parallelism ~3.7x on 8
+  threads). Two consequences: raising maxdim to 512-1024 for the convergence
+  rerun is far cheaper than a chi^3 extrapolation suggests, and per-step
+  overhead (block count, threading) is a better optimisation target than chi.
+- **Expansion's true footprint exceeds its own 455 s**: `expand` (directsum)
+  can nearly double the working bond, and the next tdvp call sweeps at that
+  inflated bond before truncating — the chunk right after the chi 246→256
+  expansion ran at 202 s/step vs the 103 s/step steady state. Expansion also
+  switched off for good at beta = 2.5 (chi pinned at maxdim), so the entire
+  beta > 2.5 evolution was pure TDVP.
+- **The warm-state rho export anomaly is confirmed at ncas = 10**: kT = 4
+  (chi = 19!) costs 120 s while every colder export is ~4.2 s — block-bound at
+  near-ln(dim) entropy, exactly the regime the fused backend's coarser blocks
+  target.
+- **Julia-version drift is real**: same code, same settings vs the Aug-8
+  artifact (Julia upgraded to 1.12.6 since): warm rungs +20-40%, coldest rung
+  −13%, net +15% (6084 s vs 5302 s ladder). Timing comparisons must state the
+  stack. (Incidentally: 1.12's parser rejects the CLI's old
+  `... == @__FILE__ && main(ARGS)` guard line — now parenthesized; the CLI
+  would not have started at all on 1.12 without it.)
+
+**Levers, ranked by measured ceiling** (all numbers from this profile):
+1. *Fewer TDVP steps.* 57 steps total; 19 of them cover beta 4→10 where the
+   state barely moves (E falls 0.77, chi pinned). The `ramp = 1` grading only
+   reaches `dbeta_max = 0.5` at beta = 9; a steeper ramp or larger `dbeta_max`
+   plausibly halves the cold tail (~1000 s, 16%) at a cost certifiable by the
+   existing `converge_dbeta`.
+2. *Loosen the Lanczos tolerance.* tdvp's `exponentiate` runs at KrylovKit's
+   default (~1e-12) while truncation error is 1e-8 by construction —
+   `updater_kwargs = (; tol,)` is plumbed and untested; matvecs are the inner
+   loop of the 90%.
+3. *Fused backend at ncas = 10.* Half the sites, one fewer QN charge (coarser
+   blocks — exactly what the sublinear-chi regime and the warm-export anomaly
+   want); measured 1.37x end-to-end at CAS(8,6), untested at ncas = 10. The
+   CLI does not expose it yet.
+4. *chunk size is NOT a lever*: per-step cost is identical for n = 2 and n = 4
+   chunks (103 s), so the per-call environment build is already amortised.
+5. *JIT* (208 s/process) only matters for single-molecule runs; a
+   multi-molecule production run pays it once.
+
+Artifacts: profile log + instrumented output in session scratch
+(`profile_ncas10.log`, values mirrored here); instrumentation itself is
+permanent (`QThermalMPS.TIMER`, `--profile`).
+
+---
+
+## 2026-08-09 — **Chain halving: fused wire+ancilla sites, not Electron sites — and a 180x RDM export** (`QThermalMPS/src/fused.jl`)
+
+Direct measurement (dense TT-SVD of the same h2o CAS(8,6) thermal
+purification) settled which dim-4 grouping halves the chain without a chi
+penalty:
+
+| grouping | sites | chi@1e-10 (kT = 0.25) |
+|---|---|---|
+| qubit-blocked (current) | 24 | 221 |
+| **fused wire+ancilla** | **12** | **222** |
+| orbital "Electron" sites | 12 | **664** |
+
+**The standard QC-DMRG move — Electron sites — is a dead-end for these
+purifications** (3x chi = ~30x at chi^3), consistent with every
+blocked-vs-interleaved measurement since 2026-07-27; the wire+ancilla fusion
+is free (pair entanglement internalized). Benchmarked end-to-end: 1.37x
+(setup 97 s -> 7 s, ladder 1057 s -> 837 s). Two structural wins: JW strings
+cannot touch ancillas (F = (-1)^{n_phys} of the site), and the MPO compiles
+directly on the chain (3 QNVals).
+
+**Trap 5.** `ITensorMPOConstruction.MPO_new` mis-signs fermionic operators on
+the fused site type — hoppings acquire `(-1)^{n_anc}` on the operator site,
+a sign-gauge conjugation invisible to `<H>`, `<H^2>` and thermodynamic
+self-consistency; caught only by element-by-element dense comparison
+(`test_fused.jl`), which is now a pinned test. Fused MPOs compile with
+ITensor's own `MPO()`.
+
+**Export rewrite** (`physical_rdm`, both backends): meet-in-the-middle halves
+plus combined open indices. The chi = 256 ncas = 10 export: ~900 s -> **5.0 s**
+(bit-exact vs the production artifact); the chi = 64 warm state only 637 ->
+173 s because near-maximal entropy makes it block-bound, not FLOP-bound.
+Julia suite now 798 assertions (fused adds 68), all green.
+
+---
+
 ## 2026-08-09 — **Isomer identity is a coherence-dominated label at scale** (`scripts/pair_screen.py`, 450 pairs)
 
 The ncas = 10 anecdote (C2H2-vs-HCN screen ratio 1.15) tested on the

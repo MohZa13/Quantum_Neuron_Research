@@ -154,24 +154,49 @@ def _record_from_row(row) -> MoleculeRecord:
     return MoleculeRecord(idx=int(idx), Z=Z, R=R.copy(), F=F, C=None, eps=None)
 
 
-def iter_records(path, limit: int | None = None) -> Iterator[MoleculeRecord]:
+_SQLITE_MAX_VARS = 500          # well under SQLITE_MAX_VARIABLE_NUMBER
+
+
+def iter_records(path, limit: int | None = None,
+                 indices=None) -> Iterator[MoleculeRecord]:
     """Stream MoleculeRecords from the raw QH9Stable SQLite database.
 
     ``path`` is either the ``.db`` file or a QH9 root directory containing
     ``QH9Stable/raw/QH9Stable.db``. Yields at most ``limit`` records when
     ``limit`` is not None.
+
+    ``indices`` restricts the stream to those QH9 record ids (``MoleculeRecord
+    .idx``), still in ascending id order — the way to run a targeted subset,
+    e.g. the head of a screening ranking, without walking the whole table.
+    Ids absent from the database are silently skipped.
     """
     if limit is not None and limit <= 0:
         return
     db_path = _resolve_db_path(path)
     n_yielded = 0
     with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
-        cursor = conn.execute("select id, N, Z, pos, Ham from data order by id")
-        for row in cursor:
-            yield _record_from_row(row)
-            n_yielded += 1
-            if limit is not None and n_yielded >= limit:
-                break
+        if indices is None:
+            cursor = conn.execute(
+                "select id, N, Z, pos, Ham from data order by id")
+            for row in cursor:
+                yield _record_from_row(row)
+                n_yielded += 1
+                if limit is not None and n_yielded >= limit:
+                    return
+            return
+
+        ids = sorted({int(i) for i in indices})
+        for start in range(0, len(ids), _SQLITE_MAX_VARS):
+            chunk = ids[start:start + _SQLITE_MAX_VARS]
+            placeholders = ",".join("?" * len(chunk))
+            cursor = conn.execute(
+                "select id, N, Z, pos, Ham from data "
+                f"where id in ({placeholders}) order by id", chunk)
+            for row in cursor:
+                yield _record_from_row(row)
+                n_yielded += 1
+                if limit is not None and n_yielded >= limit:
+                    return
 
 
 # --- Empirical unit detection ------------------------------------------------

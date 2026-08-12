@@ -23,6 +23,7 @@ import sys
 import time
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -154,6 +155,25 @@ def _iter_results(tasks, workers: int):
         yield from pool.imap_unordered(process_molecule, tasks, chunksize=1)
 
 
+def parse_indices(spec: str | None) -> list[int] | None:
+    """'0-9,42' or '@path' -> sorted unique ids; None stays None."""
+    if spec is None:
+        return None
+    if spec.startswith("@"):
+        text = Path(spec[1:]).read_text()
+        parts = text.replace(",", " ").split()
+    else:
+        parts = [p for p in spec.replace(" ", "").split(",") if p]
+    out: set[int] = set()
+    for part in parts:
+        if "-" in part:                      # QH9 ids are non-negative
+            lo, hi = part.split("-", 1)
+            out.update(range(int(lo), int(hi) + 1))
+        else:
+            out.add(int(part))
+    return sorted(out)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="qthermal.run",
@@ -161,6 +181,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--qh9-path", required=True,
                    help="QH9Stable.db file or QH9 root directory")
     p.add_argument("--out", required=True, help="output HDF5 file")
+    p.add_argument("--indices", default=None,
+                   help="restrict to these QH9 record ids: comma-separated "
+                        "ints and a-b ranges (e.g. '0-9,42'), or '@file' "
+                        "with one id per line. Applied before --limit.")
     p.add_argument("--limit", type=int, default=100,
                    help="max molecules to process (default 100)")
     p.add_argument("--n-act-occ", type=int, default=4)
@@ -240,7 +264,8 @@ def main(argv=None) -> int:
         def tasks():
             nonlocal n_resumed
             for ordinal, record in enumerate(
-                    iter_records(args.qh9_path, limit=args.limit)):
+                    iter_records(args.qh9_path, limit=args.limit,
+                                 indices=parse_indices(args.indices))):
                 unit = detector.unit_for(record, ordinal)
                 if writer.meta.get("unit") == "pending":
                     writer.update_meta("unit", unit)

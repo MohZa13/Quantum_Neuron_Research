@@ -24,7 +24,7 @@ MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python \
 ```
 
 Use `--quick` for a CI-sized subset. Raw results are in
-[`benchmarks/scaling_results.csv`](benchmarks/scaling_results.csv).
+[`benchmarks/scaling_results.csv`](../benchmarks/scaling_results.csv).
 
 The measurements below were collected on an Intel Core i5-8350U (4 cores / 8
 threads), Python 3.12.3, NumPy 2.4.6, SciPy 1.18.0, and PennyLane 0.45.0. CuPy

@@ -21,13 +21,11 @@ Outputs (results/):
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from quantum_training_impls import run_original, run_pennylane
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
