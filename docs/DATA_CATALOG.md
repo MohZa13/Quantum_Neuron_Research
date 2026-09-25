@@ -316,6 +316,25 @@ train at one kT, test at the other): chance for both pools — the honest
 negative that motivates multi-temperature training sets. See RESEARCH_LOG
 2026-08-09 for the two confounds.
 
+## 3g. XX vs XXX spin-chain thermal states and the GReLU neuron (2026-09-23 … 25)
+
+### `data/xx_xxx_thermal_states/xx_xxx_n10.h5` — 2.7 GB, untracked
+
+External handoff (documented in the folder's `HANDOFF.md`): 840 thermal states
+(84 random XX/XXX chains × 10 temperatures, n = 10) as χ-truncated MPOs, with
+couplings J and dense-ED certificates. Obtain from the provider; verify with
+`SHA256SUMS`. The experiment rebuilds each ρ exactly from J (the χ64 MPO is off
+by up to 1.6e-2 in trace distance at kT = 0.1).
+
+### `experiments/xx_xxx_grelu/results/*.csv` — untracked, regenerable
+
+Producers `experiments/xx_xxx_grelu/src/{train_xx_xxx_grelu,ffnn_xx_xxx,metrics_xx_xxx}.jl`.
+`split.csv` (the chain-level train/test split, seed 20260923) is regenerated
+deterministically by the `split` step; `cv_choice.csv` must exist before the
+later steps. Total ≈ 8 MB, ≈ 2.5 h to regenerate on an M1 Pro. The figures in
+`experiments/xx_xxx_grelu/figures/` are tracked so the report renders; the
+PDF is rebuilt by `src/build_report_pdf.py`.
+
 ## 4. Screening tables
 
 | File | Rows | Contents |

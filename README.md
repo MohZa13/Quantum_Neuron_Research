@@ -61,6 +61,10 @@ Every directory has its own `README.md`; every file is catalogued in
 - `notebooks/` — paper-faithful and PennyLane-optimized classifier notebooks
 - `figures/` — figure-generation scripts and rendered PNGs
 - `tensor-network-testing/` — Julia (Yao/ITensor) trainers for Algorithms 8/9
+- `experiments/` — self-contained studies, each with `src/`, `figures/` and a `REPORT.md`
+  - `experiments/xx_xxx_grelu/` — GReLU quantized neuron (Algorithms 8/9 to train,
+    Gaussian Algorithm 5 to classify) on XX vs XXX spin-chain thermal states, with a
+    classical feed-forward control. Report: [`REPORT.md`](experiments/xx_xxx_grelu/REPORT.md)
 - `results/` — generated HDF5 thermal-state files and benchmark CSVs
 - `data/` — QH9 database, Slater-weight builder (`build_slater.py`), and the
   raw-SQLite AO-ordering audit (`qh9_raw_sqlite_audit.md`)

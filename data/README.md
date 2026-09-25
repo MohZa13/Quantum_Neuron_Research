@@ -39,3 +39,12 @@ path expects `{root}/QH9Stable/raw/QH9Stable.db`; run
 `python3 data/build_slater.py --help` for the full CLI (group selection by
 qubit count, chunked `--all-groups` mode, scan reuse via
 `--scan-from data/qh9_scan.jsonl`).
+
+## xx_xxx_thermal_states/
+
+An external handoff: MPO thermal states of random XX and XXX spin chains
+(n = 10, 840 samples), a small n = 4 fixture, a Python reader and baseline
+results. `HANDOFF.md` and `CLAUDE.md` document it. **The two `.h5` files are not
+tracked** (`xx_xxx_n10.h5` is 2.7 GB; `*.h5` is gitignored): obtain them from the
+dataset provider, place them here, and verify with `shasum -a 256 -c SHA256SUMS`.
+Used by `experiments/xx_xxx_grelu/`.
