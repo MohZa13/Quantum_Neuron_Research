@@ -11,16 +11,18 @@ design choices, results with figures, analysis and future directions.
 [plot_menu.md](plot_menu.md) is the pre-run planning document.
 
 ```
-REPORT.md / REPORT.pdf    write-up (figures A2 … K)
+REPORT.md / REPORT.pdf    write-up (figures A2 … L)
+pipeline.ipynb            the full pipeline as a Julia notebook (kernel "Julia 1.12", via IJulia)
 plot_menu.md              pre-run plot options, kept for reference
 src/
   grelu_neuron.jl         the neuron: exact loss/gradient, Monte-Carlo Algorithms 8 and 9,
                           value estimator, Gaussian Algorithm 5 firing
   xx_xxx_data.jl          loader, exact states from J, MPO check, chain-level split
   train_xx_xxx_grelu.jl   experiments: split | cv | final | kT | gradvar | shots | classical | readout | fire
+  qumode_itensor.jl       Algorithm 5 with an explicit ITensor qumode (n = 4 validation)
   ffnn_xx_xxx.jl          classical ReLU network (37 -> 10 -> 1): seeds, 50-shuffle label control,
                           temperature transfer, finite-measurement inputs
-  metrics_xx_xxx.jl       test-set metrics table + per-state complexity (chi_mps)
+  metrics_xx_xxx.jl       test-set metrics table
   plot_xx_xxx_grelu.jl    all figures, from results/
   test_grelu_neuron.jl    19 checks on the n = 4 fixture
   build_report_pdf.py     REPORT.md -> REPORT.pdf (Python `markdown` + Google Chrome)
@@ -39,13 +41,20 @@ Get `xx_xxx_n10.h5` and `fixture_n4.h5` from the dataset provider (see
 cd data/xx_xxx_thermal_states && shasum -a 256 -c SHA256SUMS && cd -
 ```
 
-**2. Julia packages** (Julia 1.12): HDF5, Optimisers, Plots, SpecialFunctions.
+**2. Julia packages** (Julia 1.12): HDF5, Optimisers, Plots, SpecialFunctions, ITensors, ITensorMPS.
 
 ```bash
-julia -e 'using Pkg; Pkg.add(["HDF5", "Optimisers", "Plots", "SpecialFunctions"])'
+julia -e 'using Pkg; Pkg.add(["HDF5", "Optimisers", "Plots", "SpecialFunctions", "ITensors", "ITensorMPS"])'
 ```
 
-**3. Run**, from the repository root. `split` and `cv` must come first: every
+**3a. Notebook.** [`pipeline.ipynb`](pipeline.ipynb) walks through the whole pipeline. It runs the fast steps in the notebook and the full experiments as subprocesses. With `RERUN = false` it uses the saved `results/` (≈ 6 min). On a fresh clone `results/` is empty, so set `RERUN = true` (≈ 2.5 h). It needs the IJulia kernel:
+
+```bash
+julia -e 'using Pkg; Pkg.add("IJulia"); using IJulia; IJulia.installkernel("Julia")'
+jupyter notebook experiments/xx_xxx_grelu/pipeline.ipynb
+```
+
+**3b. Command line**, from the repository root. `split` and `cv` must come first: every
 later step reads `results/split.csv` and `results/cv_choice.csv`. Times are for
 an M1 Pro.
 
@@ -54,6 +63,7 @@ julia experiments/xx_xxx_grelu/src/test_grelu_neuron.jl                    # 19 
 julia experiments/xx_xxx_grelu/src/train_xx_xxx_grelu.jl split cv           # ~45 min
 julia experiments/xx_xxx_grelu/src/train_xx_xxx_grelu.jl final kT gradvar shots classical readout fire   # ~1.5 h
 julia experiments/xx_xxx_grelu/src/ffnn_xx_xxx.jl                           # ~3 min
+julia experiments/xx_xxx_grelu/src/qumode_itensor.jl                        # ~1.5 min (ITensor qumode check)
 julia experiments/xx_xxx_grelu/src/metrics_xx_xxx.jl                        # seconds
 julia experiments/xx_xxx_grelu/src/plot_xx_xxx_grelu.jl                     # all figures
 python3 experiments/xx_xxx_grelu/src/build_report_pdf.py                    # optional

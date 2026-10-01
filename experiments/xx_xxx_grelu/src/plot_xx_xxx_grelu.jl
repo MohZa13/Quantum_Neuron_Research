@@ -14,11 +14,14 @@
 #   F1  temperature transfer       (kT_transfer_predictions.csv, final_predictions.csv)
 #   G   classical vs quantum ansatz (classical_predictions.csv, final_predictions.csv)
 #   H   readout cost at inference  (readout.csv)
-#   G2  classical-ansatz errors by state: kT vs chi_mps scatter (classical_predictions.csv,
-#       state_complexity.csv from metrics_xx_xxx.jl)
+#   G2  classical-ansatz errors by state: one row per test chain, kT across (classical_predictions.csv)
 #   I   inference by firing the neuron (Gaussian Alg 5) vs readout circuits (fire.csv, readout.csv)
 #   J   test-state scatter at fixed firing budgets + the exact limit (fire.csv, final_predictions.csv)
+#   I2  Algorithm 5 with an explicit ITensor qumode vs the exact sampler, n = 4 fixture
+#       (qumode_itensor_validation.csv, qumode_itensor_example.csv from qumode_itensor.jl)
 #   K   quantum neuron vs feed-forward network: temperature transfer and accuracy vs copies of rho
+#   L   correct / incorrect counts per class for the practical classifiers at 3 budgets
+#       (fire.csv, ffnn_measure.csv)
 #       (kT_transfer_predictions.csv, ffnn_kT_transfer_predictions.csv, fire.csv, ffnn_measure.csv)
 #
 # Output: experiments/xx_xxx_grelu/figures/<name>.png and .pdf
@@ -421,31 +424,25 @@ function fig_h()
   save(p, "H_readout_cost")
 end
 
-# ------------------------------- test-state scatter: kT vs complexity (G2, J) ---
+# ------------------------------------- per-state error map: chains x kT (G2, J) ---
 
 """
-One marker per test state: x = kT, y = chi_mps (the bond dimension the dataset's
-purification MPS needed -- how complex the state is to represent).  Colour and
-shape = true Hamiltonian; HOLLOW = correctly classified, FILLED = misclassified.
-Each chain's 10 states are joined by a faint line.
+One marker per test state: x = kT, y = the test chain (8 XX rows, then 8 XXX
+rows).  Colour and shape = true Hamiltonian; HOLLOW = correctly classified,
+FILLED = misclassified.
 """
-function scatter_panel(pred, title; legend=:topright, ylabel=true, ms=7, notesize=9)
-  cx = readcsv("state_complexity.csv")
-  chi = Dict(zip(cx["sample"], cx["chi_mps"]))
-  y = [chi[s] for s in pred["sample"]]
+function scatter_panel(pred, title; legend=:topright, ylabel=true, ms=7, notesize=9, headroom=2.2)
+  groups = unique(pred["group"])
+  key(g) = (startswith(g, "XXX") ? 1 : 0, parse(Int, split(g, ':')[2]))
+  order = sort(groups; by=key)
+  row = Dict(g => i for (i, g) in enumerate(order))
+  y = [row[g] for g in pred["group"]]
   nerr = count(==(0.0), pred["correct"])
-  p = plot(; xscale=:log10, yscale=:log10, xticks=KTICKS, xlabel="kT (log scale)",
-           ylabel=ylabel ? "state complexity: MPS bond dimension χ needed (log scale)" : "",
-           yticks=([25, 50, 100, 200, 400], ["25", "50", "100", "200", "400"]), ylims=(24, 720),
-           title=title, legend=legend)
+  p = plot(; xscale=:log10, xticks=KTICKS, xlabel="kT (log scale)", xlims=(0.085, 2.6),
+           ylabel=ylabel ? "test chain" : "", yticks=(1:length(order), order),
+           ylims=(0.3, length(order) + headroom), title=title, legend=legend, yflip=false)
+  hline!(p, [count(g -> !startswith(g, "XXX"), order) + 0.5]; color=GRID, lw=1.5, label=false)
   shape = Dict("XX" => :circle, "XXX" => :rect)
-  shift = Dict("XX" => 0.975, "XXX" => 1.025)           # small offset so classes don't overlap
-  for g in unique(pred["group"])
-    m = findall(==(g), pred["group"])
-    o = m[sortperm(pred["kT"][m])]
-    plot!(p, pred["kT"][o] .* shift[pred["model"][o[1]]], y[o]; color=CLASS[pred["model"][o[1]]],
-          lw=0.6, alpha=0.35, label=false)
-  end
   for model in ("XX", "XXX"), ok in (1.0, 0.0)
     m = findall((pred["model"] .== model) .& (pred["correct"] .== ok))
     lab = "$model — " * (ok == 1 ? "correct (hollow)" : "misclassified (filled)") * "  n = $(length(m))"
@@ -454,17 +451,18 @@ function scatter_panel(pred, title; legend=:topright, ylabel=true, ms=7, notesiz
                msc=CLASS[model], label=lab)
       continue
     end
-    scatter!(p, pred["kT"][m] .* shift[model], y[m]; marker=shape[model], ms=ms, msw=1.6,
+    scatter!(p, pred["kT"][m], y[m]; marker=shape[model], ms=ms, msw=1.6,
              msc=CLASS[model], color=ok == 1 ? "#fcfcfb" : CLASS[model], label=lab)
   end
-  annotate!(p, 0.1, 32, text("$nerr / $(length(pred["correct"])) test states misclassified", notesize, INK, :left))
+  annotate!(p, 0.09, length(order) + 1.2, text("$nerr / $(length(pred["correct"])) test states misclassified",
+                                               notesize, INK, :left))
   return p
 end
 
 "G2: the classical-ansatz neuron's errors, state by state (exact outputs)."
 function fig_g2()
   c = readcsv("classical_predictions.csv")
-  (c === nothing || readcsv("state_complexity.csv") === nothing) && return
+  c === nothing && return
   p1 = scatter_panel(sel(c; loss_type="margin", run="classical_bias", split="test"),
                      "Alg 9 · classical ansatz + bias"; ms=5.5, notesize=8)
   p2 = scatter_panel(sel(c; loss_type="square", run="classical", split="test"),
@@ -536,7 +534,7 @@ firings = the exact output), which firing converges to.
 """
 function fig_j()
   d, f = readcsv("fire.csv"), readcsv("final_predictions.csv")
-  (d === nothing || f === nothing || readcsv("state_complexity.csv") === nothing) && return
+  (d === nothing || f === nothing) && return
   budgets = (4, 64, 1024)
   panels = []
   for kind in ("margin", "square")
@@ -546,10 +544,10 @@ function fig_j()
       tot = kind == "margin" ? 2N : N
       push!(panels, scatter_panel(c, @sprintf("%s · %d firings/neuron (%d copies)", name, N, tot);
                                   legend=(kind == "margin" && j == 1) ? :topright : false,
-                                  ylabel=j == 1, ms=4.5, notesize=8))
+                                  ylabel=j == 1, ms=4.5, notesize=8, headroom=6.0))
     end
     push!(panels, scatter_panel(sel(f; loss_type=kind, split="test"), "$name · exact limit (∞ firings)";
-                                legend=false, ylabel=false, ms=4.5, notesize=8))
+                                legend=false, ylabel=false, ms=4.5, notesize=8, headroom=6.0))
   end
   p = plot(panels...; layout=(2, 4), size=(1900, 1020), left_margin=11Plots.mm,
            bottom_margin=9Plots.mm, top_margin=2Plots.mm, titlefontsize=10, legendfontsize=7,
@@ -603,7 +601,83 @@ function fig_k()
   save(p, "K_quantum_vs_ffnn")
 end
 
+# ------------------------------------- L: correct / incorrect counts per class ---
+
+function fig_l()
+  fq, fn = readcsv("fire.csv"), readcsv("ffnn_measure.csv")
+  (fq === nothing || fn === nothing) && return
+  # roughly matched copies of rho per state: (Alg 9 total, Alg 8, network)
+  levels = (("≈ 32 copies", 32, 16, 48), ("≈ 128 copies", 128, 64, 192), ("≈ 512 copies", 512, 256, 768))
+  panels = []
+  for (r, (lvl, n9, n8, nf)) in enumerate(levels)
+    for (c, (name, d)) in enumerate((("Alg 9 neuron, fired", sel(fq; loss_type="margin", total_firings=Float64(n9))),
+                                     ("Alg 8 neuron, fired", sel(fq; loss_type="square", total_firings=Float64(n8))),
+                                     ("network, measured inputs", sel(fn; copies=Float64(nf)))))
+      copies = c == 1 ? n9 : c == 2 ? n8 : nf
+      runs = c == 3 ? length(unique(d["rep"])) * length(unique(d["seed"])) : length(unique(d["rep"]))
+      p = plot(; title="$name · $copies copies · mean of $runs runs", ylim=(0, 92),
+               legend=(r == 1 && c == 1) ? :topright : false,
+               ylabel=c == 1 ? "test states ($lvl)" : "",
+               xticks=([1, 2], ["XX", "XXX"]), xlims=(0.4, 2.6), titlefontsize=9)
+      for (k, model) in enumerate(("XX", "XXX"))
+        m = d["model"] .== model
+        ok = sum(d["correct"][m]) / runs
+        bad = count(m) / runs - ok
+        bar!(p, [k - 0.18], [ok]; bar_width=0.34, color="#fcfcfb", linecolor=CLASS[model], lw=2,
+             label=k == 1 ? "correct (hollow)" : false)
+        bar!(p, [k + 0.18], [bad]; bar_width=0.34, color=CLASS[model], linecolor=CLASS[model], lw=2,
+             label=k == 1 ? "misclassified (filled)" : false)
+        annotate!(p, k - 0.18, ok + 4, text(@sprintf("%.1f", ok), 8, INK))
+        annotate!(p, k + 0.18, bad + 4, text(@sprintf("%.1f", bad), 8, INK))
+      end
+      push!(panels, p)
+    end
+  end
+  p = plot(panels...; layout=(3, 3), size=(1200, 1050), left_margin=6Plots.mm, bottom_margin=3Plots.mm,
+           top_margin=2Plots.mm, legendfontsize=8,
+           plot_title="Test states correctly and incorrectly classified, by true Hamiltonian (80 XX + 80 XXX)",
+           plot_titlefontsize=11)
+  save(p, "L_classified_counts")
+end
+
+# -------------------------- I2: the qumode simulated in ITensor vs exact sampler ---
+
+function fig_i2()
+  v, e = readcsv("qumode_itensor_validation.csv"), readcsv("qumode_itensor_example.csv")
+  (v === nothing || e === nothing) && return
+  # left: output CDF of one example state, Alg 8 model (the hardest case), vacuum qumode
+  pa = plot(; title="Alg 8 neuron, one fixture state: output distribution",
+            xlabel="neuron output  T2·ReLU(p)", ylabel="P(output ≤ y)", legend=:bottomright)
+  c = sel(e; loss_type="square")
+  vac = abs.(c["T1"] .- 1 / sqrt(2)) .< 1e-6
+  ds_ = sort(unique(c["d"][vac]))
+  for (i, d) in enumerate(ds_)
+    m = vac .& (c["d"] .== d)
+    plot!(pa, c["y_out"][m], c["cdf_itensor"][m]; color=RAMP[i + 1], lw=2,
+          label="ITensor qumode, Fock cutoff d = $(Int(d))")
+  end
+  m = vac .& (c["d"] .== ds_[end])
+  plot!(pa, c["y_out"][m], c["cdf_exact"][m]; color=INK, ls=:dash, lw=1.5, label="exact sampler (analytic)")
+  # right: worst-case error vs Fock cutoff, both models, two squeezings
+  pb = plot(; title="worst case over 24 fixture states", xlabel="Fock cutoff d",
+            ylabel="max |mean output − exact|", yscale=:log10, legend=:topright, xticks=[20, 40, 60, 80])
+  for kind in ("margin", "square"), (T1, ls, mk, lab) in ((1 / sqrt(2), :solid, :circle, "vacuum, T1 = 1/√2"),
+                                                         (0.45, :dash, :rect, "squeezed, T1 = 0.45"))
+    r = sel(v; loss_type=kind)
+    r = rowsel(r, abs.(r["T1"] .- T1) .< 1e-6)
+    ds2 = sort(unique(r["d"]))
+    err = [maximum(abs.(r["mean_itensor"][r["d"] .== d] .- r["mean_exact"][r["d"] .== d])) for d in ds2]
+    plot!(pb, ds2, max.(err, 1e-8); color=ALG[kind], ls=ls, marker=mk, ms=5, msw=0,
+          label=(kind == "margin" ? "Alg 9 neuron" : "Alg 8 neuron") * ", " * lab)
+  end
+  p = plot(pa, pb; layout=(1, 2), size=(1150, 450), left_margin=6Plots.mm, bottom_margin=6Plots.mm,
+           top_margin=3Plots.mm, legendfontsize=8,
+           plot_title="Algorithm 5 with an explicit qumode (ITensor \"Boson\" site) reproduces the exact firing sampler",
+           plot_titlefontsize=11)
+  save(p, "I2_qumode_itensor")
+end
+
 gr()
-for f in (fig_a2, fig_b1, fig_c, fig_d1, fig_e, fig_f1, fig_g, fig_g2, fig_h, fig_i, fig_j, fig_k)
+for f in (fig_a2, fig_b1, fig_c, fig_d1, fig_e, fig_f1, fig_g, fig_g2, fig_h, fig_i, fig_i2, fig_j, fig_k, fig_l)
   f()
 end

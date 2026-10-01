@@ -234,18 +234,20 @@ Self-contained study; run everything from the repository root. Full write-up in
 
 | File | |
 |---|---|
-| `REPORT.md`, `REPORT.pdf` | **[ref]** The write-up: data, split, design choices, runs, results (figures A2–K), analysis, caveats, future directions |
+| `REPORT.md`, `REPORT.pdf` | **[ref]** The write-up: data, split, design choices, runs, results (figures A2–L, I2), analysis, caveats, future directions, references |
+| `pipeline.ipynb` | **[entry]** The full pipeline as a Julia notebook (kernel "Julia 1.12" via IJulia). Fast steps in-process, experiments as subprocesses; `RERUN` flag regenerates `results/` |
 | `README.md` | **[ref]** Folder map and the reproduction order |
 | `plot_menu.md` | **[ref]** Pre-run planning document (22 plot options) |
 | `src/grelu_neuron.jl` | **[core]** The GReLU neuron: parity-block Pauli algebra, exact loss/gradient (Daleckii–Krein), Monte-Carlo GReLU Algorithms 8 and 9, value estimator, Gaussian Algorithm 5 firing |
 | `src/xx_xxx_data.jl` | **[core]** Dataset loader: exact ρ rebuilt from the stored J by S^z-sector diagonalisation, MPO contraction check, chain-level stratified split |
 | `src/train_xx_xxx_grelu.jl` | **[entry]** Experiments: `split cv final kT gradvar shots classical readout fire` → `results/*.csv` |
 | `src/ffnn_xx_xxx.jl` | **[entry]** Classical control: ReLU network 37→10→1, 50-shuffle label control, temperature transfer, finite-measurement inputs |
-| `src/metrics_xx_xxx.jl` | **[entry]** Test-set metrics table and per-state complexity (χ_MPS) |
+| `src/metrics_xx_xxx.jl` | **[entry]** Test-set metrics table (accuracy, precision, recall, F1, IoU, mIoU, mAP, AUC) |
+| `src/qumode_itensor.jl` | **[entry]** Gaussian Algorithm 5 with an explicit qumode (ITensor `"Boson"` site, `exp`, `apply_dag`), validated against the analytic firing sampler on the n = 4 fixture |
 | `src/plot_xx_xxx_grelu.jl` | **[entry]** All figures from `results/` |
 | `src/test_grelu_neuron.jl` | **[entry]** 19 checks on the n = 4 fixture |
 | `src/build_report_pdf.py` | **[entry]** `REPORT.md` → `REPORT.pdf` via headless Chrome |
-| `figures/*.png`, `figures/*.pdf` | **[gen]** Figures A2–K, producer `src/plot_xx_xxx_grelu.jl` |
+| `figures/*.png`, `figures/*.pdf` | **[gen]** Figures A2–L and I2, producer `src/plot_xx_xxx_grelu.jl` |
 
 ## `results/`
 

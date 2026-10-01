@@ -101,6 +101,17 @@ The **exact gradient** (Daleckii–Krein divided differences) is the expected va
 - **Algorithm 8 model:** fire N times and predict XXX when the average is above ½.
 - **Algorithm 9 model:** fire N times on each of two neurons, one on H(θ) and one on −H(θ), and predict XXX when mean(H) − mean(−H) ≥ 0. That difference estimates Tr[Hρ], because GReLU(x) − GReLU(−x) = x.
 
+**The qumode itself, simulated explicitly in ITensor** (`src/qumode_itensor.jl`). The sampler above eliminates the qumode analytically. To check that reduction, Algorithm 5 was also simulated literally, with the control qumode as an explicit bosonic mode, on the n = 4 fixture (4 qubits + 1 qumode). The steps follow the algorithm [1, Sec. IV.B]:
+
+1. **Sites.** The qumode is one ITensor site of type `"Boson"`, `siteind("Boson"; dim = d)`. In ITensor this is an alias of `"Qudit"`: a d-level truncated Fock space with the ladder operators `"a"`, `"adag"` and number operator `"N"` [2, 3]. The data register is `siteinds("Qubit", 4)`.
+2. **Hamiltonian.** H(θ) is built term by term with `OpSum` (`"Z"`, `"X"`, `"Y"` Pauli operators, plus `"Id"` for the bias), converted with `MPO(os, sites)`, and contracted to a single operator ITensor with `prod` [3]. Its expectation in ρ reproduces the pipeline's Tr[Hρ] to 12 digits.
+3. **Initial state.** The qumode starts in the pure Gaussian state whose momentum density is N(0, T₁²). Its Fock coefficients are computed numerically from that momentum wavefunction, using the same ⟨p|n⟩ = (−i)ⁿ ψₙ(p) (Hermite functions ψₙ) as the measurement, so no separate squeezing-sign convention enters [5]. T₁ = 1/√2 is the vacuum. The data register is ρ, written as an ITensor with row indices s′ and column indices s.
+4. **Coupling.** x̂ = (a + a†)/√2 is built from the site operators, the generator x̂ ⊗ H(θ) as an outer product of ITensors, and U = exp(i x̂ ⊗ H/T₂) with ITensor's matrix exponential `exp(A::ITensor; ...)` over primed/unprimed index pairs [4, `matrix_algebra.jl`].
+5. **Evolution.** The joint state |c⟩⟨c| ⊗ ρ evolves as U(·)U† with `apply(U, ρ; apply_dag = true)` [4, `product(A, B; apply_dag)` in `tensor_algebra.jl`].
+6. **Homodyne measurement.** Tracing out the qubits (`delta(s′, s)` contractions) leaves the qumode's d × d density matrix ρ_q. The momentum distribution is P(p) = ⟨p|ρ_q|p⟩ on a fine grid, and the neuron's output is T₂·ReLU(p).
+
+The simulated output distribution is compared with the analytic sampler's (section I2). The comparison covers every fixture state, both trained models (and the −H neuron of the Algorithm 9 model), Fock cutoffs d = 20–80, and two squeezings at the same T = T₁T₂.
+
 ### 3.5 Validation (`src/test_grelu_neuron.jl`, n = 4 fixture, 19 checks, all pass)
 
 - **Reader:** contracting the MPOs reproduces the file's own stored trace distances to about 1e-15. This fixes site order, J order and the Pauli convention.
@@ -109,6 +120,7 @@ The **exact gradient** (Daleckii–Krein divided differences) is the expected va
 - **Estimators:** the Algorithm 9 and Algorithm 8 Monte-Carlo estimators are unbiased (batch means within ±4.5 SE of the exact gradient) in every mode: exact circuit expectations, single shots, class averages vs individual states, pre-averaged vs literal value circuit.
 - **Readout:** the finite-shot estimate of the neuron's output is unbiased.
 - **Firing:** the mean of Gaussian Algorithm 5 firings equals the exact output Tr[GReLU(H)ρ], and fire(H) − fire(−H) recovers the Algorithm 9 score Tr[Hρ].
+- **Qumode (separate script, `src/qumode_itensor.jl`):** the explicit ITensor simulation of Algorithm 5 reproduces the sampler's full output distribution (section I2).
 
 ## 4. Runs
 
@@ -122,6 +134,7 @@ The **exact gradient** (Daleckii–Krein divided differences) is the expected va
 | finite shots | `shots` | training on single-shot Monte-Carlo gradients: Alg 9 N = 16/64/256, Alg 8 N = 64/256 runs per step | ~45 min |
 | classical ansatz | `classical` | the same neuron with only Z and ZZ terms: Alg 9 with and without a bias term, Alg 8 with its bias; 200 exact steps | ~2 min |
 | readout | `readout` | the trained neurons' test accuracy when each state's score comes from 1 … 4,096 measurements, 10 repeats | ~5 min |
+| qumode check | `qumode_itensor.jl` | Algorithm 5 with an explicit ITensor qumode on the n = 4 fixture: 24 states × both models × 5 (Fock cutoff, squeezing) settings | ~1.5 min |
 | firing | `fire` | the trained neurons used by firing them (Gaussian Algorithm 5): 1 … 16,384 firings per neuron, 10 repeats | ~2 min |
 | classical control | `ffnn_xx_xxx.jl` | ReLU network: 5 seeds + 50 label shuffles; temperature transfer (5 seeds); finite-measurement inputs (3 … 12,288 copies, 5 networks × 10 repeats) | ~3 min |
 
@@ -222,13 +235,13 @@ This uses the same GReLU neuron and training, but H(θ) keeps only the Z_i and Z
 - **With the bias, the classical neuron fails only at kT = 2, and only on XXX chains.** The bottom panels show why. As the chain heats up, the XXX scores fall towards the XX scores and cross the threshold at kT = 2. This is exactly the overlap in A2: hot XXX ⟨ZZ⟩ ≈ −0.45 against cold XX ≈ −0.46. With ⟨ZZ⟩ as its only information, a single threshold can't handle every temperature at once. The full ansatz compares ⟨ZZ⟩ with ⟨XX⟩ and has no such problem.
 - **The classical Algorithm 8 neuron found a subtler signal.** It learned alternating site terms (θ_Z,i ≈ ±0.4 along the chain) even though ⟨Z_i⟩ = 0 for every state. Its Hamiltonian is diagonal, so Tr[GReLU(H)ρ] = Σ_z p(z)·GReLU(E(z)) weighs the whole Z-basis distribution p(z) nonlinearly, not just its averages. It is picking up an alternating (Néel-like) pattern in which configurations are likely. That is why it does better at kT = 2 than the linear Algorithm 9 score.
 
-**Which states the classical-ansatz neuron gets wrong.** One marker per test state: x is temperature, and y is the MPS bond dimension χ that the dataset's generator needed for that state, a measure of how complex the state is to represent. Colour and shape show the true Hamiltonian (XX circles, XXX squares), each chain's 10 temperatures are joined by a faint line, and **hollow means correctly classified, filled means misclassified**. These are exact outputs, so the errors reflect what the Z-only *model* can represent, not measurement noise.
+**Which states the classical-ansatz neuron gets wrong.** One marker per test state: x is temperature, and each row is one of the 16 test chains (8 XX, 8 XXX). **Hollow means correctly classified, filled means misclassified.** These are exact outputs, so the errors reflect what the Z-only *model* can represent, not measurement noise.
 
 ![G2](figures/G2_scatter_classical.png)
 
-- **Every error is in one corner:** XXX states at kT = 2, which are the hottest XXX states and the least complex ones (χ = 52–75; XX states at kT = 2 need χ = 28–40). No XX state is misclassified.
-- **Algorithm 9 with a bias** misses all 8. A single threshold on ⟨ZZ⟩ can't separate hot XXX from the XX states it must also call negative (A2).
-- **Algorithm 8** keeps 3 of the 8 (χ = 61, 61, 75, towards the upper end), and its four lowest-complexity XXX states (χ = 52–56) are all misses. That's a tendency rather than a rule: it also misses one at χ = 68. It fits the idea that the least-correlated XXX states look most like XX to a model that sees only the Z basis.
+- **Every error is in one column:** XXX states at kT = 2. No XX state is misclassified.
+- **Algorithm 9 with a bias** misses all 8 XXX chains there. A single threshold on ⟨ZZ⟩ can't separate hot XXX from the XX states it must also call negative (A2).
+- **Algorithm 8** keeps 3 of the 8 (XXX:31, :35, :37). Its learned Z_i terms let it read a little more of the Z-basis distribution than the linear Algorithm 9 score (section G).
 - **The same plot for the full quantum ansatz is entirely hollow** (the exact-limit column of J), so it isn't shown separately.
 
 ### H. Inference cost: measurements per classification
@@ -264,7 +277,25 @@ Algorithms 8 and 9 only *train* θ. To use a trained neuron on a new state, the 
 - **Why the Algorithm 8 model is cheap to fire.** A firing's noise is set by how spread out H(θ)'s eigenvalues are on ρ (plus the Gaussian width T), about 1.7 per copy. The value circuit's noise is set by its prefactor ‖θ‖₁²/(√(2π)T) ≈ 236. The model is the same; only the estimator changes.
 - **Budget for 3σ on a typical test state:** about 190 copies for the Algorithm 8 model, and about 620 for the Algorithm 9 model, whose two neurons each add noise.
 
-**Which test states are misclassified when classifying by firing.** The scatter has the same encoding as G2 (x = kT, y = state complexity χ, hollow = correct, filled = misclassified). The columns are 4, 64 and 1,024 firings per neuron (repeat 1 of 10), and the exact limit, which is what firing converges to with unlimited copies.
+**Is the sampler faithful to the real algorithm? (I2)** The firings above use the analytic reduction of section 3.4. The explicit ITensor simulation of Algorithm 5, with the qumode as a truncated-Fock `"Boson"` site, gives the same output distribution:
+
+![I2](figures/I2_qumode_itensor.png)
+
+| model (n = 4 fixture) | Fock cutoff d | qumode | max \|mean − exact\| over 24 states | max \|ΔCDF\| | decisions identical to exact |
+|---|---|---|---|---|---|
+| Alg 9 (H and −H neurons) | 20, 40, 60 | vacuum (T₁ = 1/√2) | 4.6e-6 | 6.7e-6 | yes (24/24) |
+| Alg 9 | 60, 80 | squeezed (T₁ = 0.45) | 1.1e-5 | 1.7e-5 | yes |
+| Alg 8 | 20 | vacuum | 0.93 | 0.081 | **no** (accuracy 0.50 vs 1.00) |
+| Alg 8 | 40 | vacuum | 0.24 | 0.026 | yes |
+| Alg 8 | 60 | vacuum | 1.1e-4 | 5.5e-5 | yes |
+| Alg 8 | 60, 80 | squeezed (T₁ = 0.45) | 8.7e-7 | 1.4e-6 | yes |
+
+- **With a large enough Fock cutoff, the explicit qumode reproduces the sampler's whole output distribution,** not just its mean, to the numerical precision of the momentum grid (10⁻⁵–10⁻⁶).
+- **The cutoff needed depends on the trained neuron.** The coupling displaces the qumode's momentum by E/T₂, so a Hamiltonian with a wide spectrum pushes the qumode to high photon numbers. The fixture Algorithm 8 neuron (energies ⟨H⟩ ≈ −5.6 on these states) needs d ≥ 60. At d = 20 truncation distorts its output enough to destroy classification. The probability lost from the truncated space ("leak") stays at 10⁻¹⁵ even then, because the truncated coupling is still unitary, so convergence in d, not leak, is the check to use.
+- **Only T = T₁T₂ matters.** A squeezed qumode (T₁ = 0.45, T₂ = 2.22) gives the same outputs as the vacuum (T₁ = 1/√2, T₂ = 1.41), as Eq. 94 says. It also converges faster for the Algorithm 8 neuron, because the larger T₂ means smaller momentum shifts.
+- **The explicit simulation was run at n = 4.** At n = 10 the coupling U is a (1024·d) × (1024·d) matrix, about 60 GB at d = 60, so a dense explicit simulation doesn't fit. It would need an MPS/MPO treatment of the joint qubit–qumode state. The n = 10 results therefore use the analytic sampler, which this check validates.
+
+**Which test states are misclassified when classifying by firing.** The scatter has the same encoding as G2 (x = kT, one row per test chain, hollow = correct, filled = misclassified). The columns are 4, 64 and 1,024 firings per neuron (repeat 1 of 10), and the exact limit, which is what firing converges to with unlimited copies.
 
 ![J](figures/J_scatter_firing.png)
 
@@ -272,7 +303,6 @@ Algorithms 8 and 9 only *train* θ. To use a trained neuron on a new state, the 
 - **Algorithm 9 model:** errors lean cold, where its exact margin is smallest (section C). Over all 10 repeats, the cold (kT < 0.5) error rate is 15% vs 8% for hot states at 64 firings per neuron, and 4.8% vs 0.7% at 256.
 - **Algorithm 8 model:** no temperature preference (4.8% cold vs 5.9% hot at 64).
 - **By 1,024 firings per neuron** both models are at 0 of 160 on this repeat, the same as the exact limit.
-- **Complexity doesn't matter.** Errors at low budgets occur at every χ, and neither model's success depends on how complex the state is. At the same temperature, XXX states need about 1.4–1.8× the bond dimension of XX states (median χ 425 vs 303 at kT = 0.1, 64 vs 36 at kT = 2), but neither model sees χ; it's only used to place the states.
 
 ### Classical control: a feed-forward network (`src/ffnn_xx_xxx.jl`)
 
@@ -307,6 +337,22 @@ With S copies of ρ per state, S/3 go to each basis. Each copy yields one bitstr
 - **Temperature transfer:** the network is perfect both ways, on every seed. The quantum neurons each miss one chain in one direction. Transfer is a property of this data, whose symmetry signature holds at every temperature, not an advantage of the quantum neuron.
 - **Measurement cost:** at equal numbers of copies of ρ, the network is about as efficient as firing the Algorithm 8 neuron, and 3–7× more efficient than firing the Algorithm 9 neuron (3× at 95%, 7× at 99%). It needs only single-qubit measurements in three fixed bases, with no qumode or Hamiltonian evolution.
 - **What the quantum neuron still has:** about 10× fewer trainable parameters (37 vs 391), and a directly interpretable θ (D1). It needs no hand-chosen inputs: the same neuron would apply to states where no small set of local expectation values is known to be enough. On this dataset, though, such a set exists, and the network uses it at least as well.
+
+### L. Correct and incorrect counts by class
+
+The practical classifiers (the quantum neurons fired with Gaussian Algorithm 5, and the network with measured inputs), each at roughly matched numbers of copies of ρ per test state. Bars are mean counts over repeats, out of 80 XX and 80 XXX test states. Hollow bars are correctly classified states; filled bars are misclassified ones.
+
+![L](figures/L_classified_counts.png)
+
+| ≈ copies of ρ | Alg 9 neuron: XX / XXX wrong | Alg 8 neuron: XX / XXX wrong | network: XX / XXX wrong |
+|---|---|---|---|
+| ≈ 32 (32 / 16 / 48) | 24.5 / 18.3 | 7.1 / 24.4 | 7.1 / 10.2 |
+| ≈ 128 (128 / 64 / 192) | 12.7 / 6.0 | 2.0 / 6.5 | 0.6 / 0.7 |
+| ≈ 512 (512 / 256 / 768) | 4.1 / 0.3 | 0.0 / 0.4 | 0.0 / 0.0 |
+
+- **The Algorithm 8 neuron's errors are mostly XXX states called XX**, matching its precision-above-recall pattern in the metrics table.
+- **The Algorithm 9 neuron's remaining errors at high budgets are XX states, mostly cold.** At ≈512 copies, 36 of its 41 XX errors (over 10 runs) are at kT < 0.5, where XX exact scores sit closest to the threshold (section C). The chain with the most errors, XX:21, is the same one it missed in the hot → cold transfer test (F1).
+- **The network has the most even split**, and is nearly error-free from about 128 copies.
 
 ### Classification metrics
 
@@ -357,7 +403,6 @@ With few firings, the Algorithm 8 model errs towards calling XXX states XX (prec
 3. **Algorithm 9 is the better route for training; for use, it depends on how the neuron is run.** Training: its trained ‖θ‖₁ is 14× smaller, and the cost of both gradient estimators grows with ‖θ‖₁/T (Eq. C42), with Algorithm 8's growing faster. Use: if the neuron's output is estimated with qubit circuits (H), the Algorithm 8 model is prohibitively expensive (~3.6 million measurements per state). If the neuron is fired directly with Gaussian Algorithm 5 (I), it is the *cheaper* model (~190 copies vs ~620). Algorithm 5 needs a continuous-variable control register, while Algorithms 8/9 and the qubit readouts need only qubits and Hadamard tests. The inference cost therefore depends on the hardware as well as on the model.
 4. **Shot-based training needs different optimisation, not just more shots.** The failure mode is a feedback loop between ‖θ‖₁ and variance, which an optimiser designed for exact gradients doesn't damp. The gradient-error figure puts a floor on the budget: about 1,200 single-shot runs per gradient before the estimate beats the signal at θ₀.
 5. **Cold states are the harder regime for the Algorithm 9 neuron**, the opposite of the naive expectation that hot, nearly maximally mixed states are hardest. Relative to its correlators, the symmetry signature is largest when hot (A2); as the chain cools, XX states' ⟨ZZ⟩ grows towards their ⟨XX⟩. For the classical ansatz it's the opposite: kT = 2 is its failure point (G). Which temperature is hard depends on which observables the model can use.
-6. **The χ64 MPOs should not be fed to a density-matrix model at low kT.** They are off by up to 1.6% in trace distance and have negative eigenvalues. That's fine for tensor-feature classifiers, but not for anything that treats the MPO as a state.
 
 ## 7. Caveats
 
@@ -371,7 +416,7 @@ With few firings, the Algorithm 8 model errs towards calling XXX states XX (prec
 
 1. **Make shot-based training work.** Try a decaying learning rate (plain SGD / Robbins–Monro rather than Adam), an explicit ‖θ‖₁ cap or L1 penalty (which directly bounds the sample complexity), budgets that grow with ‖θ‖₁, and variance reduction (stratified sampling of s, t, v; importance sampling of k). Run several seeds.
 2. **A harder task.** Remove the SU(2) giveaway, for example XXZ with anisotropy Δ = 0.9 vs 1.1, fields, or energy-matched pairs. Or change the target: regress kT, or classify phases. This needs the dataset generator, which is not in the handoff. G suggests a good target: states where the classes differ only in correlations that no small set of local measurements captures.
-3. **Cheaper inference on qubit-only hardware.** Without a qumode, readout cost scales as (‖θ‖₁/margin)² (H). Training with an L1 penalty, or with a margin constraint at fixed ‖θ‖₁, would trade a little training loss for far fewer measurements per classification. With a qumode, firing (I) is already cheap. A literal qumode simulation with finite squeezing and a finite-resolution homodyne measurement would test how robust that advantage is.
+3. **Cheaper inference on qubit-only hardware.** Without a qumode, readout cost scales as (‖θ‖₁/margin)² (H). Training with an L1 penalty, or with a margin constraint at fixed ‖θ‖₁, would trade a little training loss for far fewer measurements per classification. With a qumode, firing (I) is already cheap. The explicit ITensor qumode (I2) is the starting point for testing how robust that advantage is: add photon loss, finite squeezing at fixed T₂, and a finite-resolution homodyne measurement.
 4. **Scale in n** with the MPS backend (`tensor-network-testing/algorithm9.jl`) for n > 12, and check whether the learned θ structure persists.
 5. **Hardware realism.** Add depolarising noise to the Hadamard tests and Trotterise the evolutions, then redo figure E.
 6. **Compare with the dataset's tensor-feature baselines on equal footing**: the same split, with parameter counts on one axis.
@@ -379,6 +424,8 @@ With few firings, the Algorithm 8 model errs towards calling XXX states XX (prec
 ## Appendix: reproducing everything
 
 Run from the repository root. The data must be at `data/xx_xxx_thermal_states/`.
+
+The whole pipeline is also a Julia notebook, [`pipeline.ipynb`](pipeline.ipynb) (kernel "Julia 1.12" via IJulia). It runs the fast steps in the notebook and the experiments below as subprocesses. Set `RERUN = true` to regenerate `results/` from scratch.
 
 ```bash
 # 19 checks, ~20 s
@@ -389,7 +436,9 @@ julia experiments/xx_xxx_grelu/src/train_xx_xxx_grelu.jl split
 julia experiments/xx_xxx_grelu/src/train_xx_xxx_grelu.jl cv final kT gradvar shots classical readout fire
 # classical control
 julia experiments/xx_xxx_grelu/src/ffnn_xx_xxx.jl        # main, transfer, measure
-# test-set metrics table + state complexity (chi_mps) for the scatter plots
+# Algorithm 5 with an explicit ITensor qumode (needs fixture_n4.h5 and cv_choice.csv)
+julia experiments/xx_xxx_grelu/src/qumode_itensor.jl
+# test-set metrics table
 julia experiments/xx_xxx_grelu/src/metrics_xx_xxx.jl
 # all figures from results/
 julia experiments/xx_xxx_grelu/src/plot_xx_xxx_grelu.jl
@@ -399,4 +448,13 @@ python3 experiments/xx_xxx_grelu/src/build_report_pdf.py
 
 `cv` must run before the others: they read `results/cv_choice.csv`. The runs of 23 September predate the `gnorm` column in `gradvar.csv`. For those runs, `results/gradvar_gnorm.csv` holds the exact gradient norms at the same two θ values, and the plot script uses whichever is present.
 
-Dependencies (global Julia 1.12 environment): HDF5, Optimisers, Plots, SpecialFunctions.
+Dependencies (global Julia 1.12 environment): HDF5, Optimisers, Plots, SpecialFunctions, and for the qumode check ITensors (v0.9.30) and ITensorMPS (v0.4.1).
+
+## References
+
+1. A. He, N. Liu, M. M. Wilde, *Fermi–Dirac machines as quantizations of neurons*, arXiv:2605.24386 (2026). The local copy is `Papers/Fermi-Dirac Machines.pdf`. Algorithm 5 and Theorem 7 (Sec. III.A); Gaussian activations and GReLU, Eqs. 92–96 (Sec. IV.B); Theorem 17 (App. F.4); Algorithms 8 and 9 (Apps. B, C.2).
+2. ITensorMPS.jl documentation, *Included SiteTypes*: "Boson" and "Qudit" site types (dimension `dim`, operators `a`, `adag`, `N`). https://docs.itensor.org/ITensorMPS/stable/IncludedSiteTypes.html — the same page ships as `docs/src/IncludedSiteTypes.md` in ITensorMPS v0.4.1.
+3. ITensors.jl v0.9.30 source: site-type definitions `src/lib/SiteTypes/src/sitetypes/boson.jl` (Boson = alias of Qudit) and `qudit.jl` (Fock-space operators); `OpSum`/`MPO` from ITensorMPS.jl v0.4.1.
+4. ITensors.jl v0.9.30 source: `exp(A::ITensor, Linds, Rinds; ishermitian)` in `src/tensor_operations/matrix_algebra.jl` (matrix exponential over index pairs); `product(A::ITensor, B::ITensor; apply_dag)` in `src/tensor_operations/tensor_algebra.jl` (used by `apply`, gives U ρ U†).
+5. C. Weedbrook et al., *Gaussian quantum information*, Rev. Mod. Phys. 84, 621 (2012). Quadrature operators x̂ = (a + a†)/√2, p̂ = i(a† − a)/√2, Gaussian states, and homodyne detection.
+6. M. Fishman, S. R. White, E. M. Stoudenmire, *The ITensor Software Library for Tensor Network Calculations*, SciPost Phys. Codebases 4 (2022).

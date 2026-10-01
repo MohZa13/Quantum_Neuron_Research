@@ -38,7 +38,7 @@
 # Output: ../results/ffnn_{summary,history,predictions,shuffle50}.csv,
 #         ffnn_kT_transfer_predictions.csv, ffnn_measure.csv
 
-include(joinpath(@__DIR__, "train_xx_xxx_grelu.jl"))    # loader, split, auc, write_rows
+isdefined(Main, :CFG) || include(joinpath(@__DIR__, "train_xx_xxx_grelu.jl"))    # loader, split, auc, write_rows
 
 const FF = (hidden=10, lr=1e-2, l2=1e-4, epochs=1000, seeds=1:5, log_every=10)
 

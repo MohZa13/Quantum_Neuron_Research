@@ -1,7 +1,7 @@
 # metrics_xx_xxx.jl
 #
 # Classification metrics on the 160 held-out test states for every trained
-# model, plus a per-state complexity table for the scatter plots.
+# model.
 #
 #   julia experiments/xx_xxx_grelu/src/metrics_xx_xxx.jl
 #
@@ -18,13 +18,12 @@
 # Accuracy, precision, recall, F1 and IoU use the model's own decision rule;
 # AP, mAP and AUC use only the ranking of its scores.
 #
-# Output: ../results/classification_metrics.csv, ../results/state_complexity.csv
+# Output: ../results/classification_metrics.csv
 
-using HDF5, Printf, Statistics
+using Printf, Statistics
 
 const EXP = normpath(joinpath(@__DIR__, ".."))
 const RES = joinpath(EXP, "results")
-const DATA = joinpath(EXP, "..", "..", "data", "xx_xxx_thermal_states", "xx_xxx_n10.h5")
 
 function readcsv(path)
   lines = readlines(path)
@@ -120,21 +119,7 @@ function main()
             r.recall, r.f1, r.iou, r.miou, r.map, r.auc)
   end
 
-  # per-state complexity: the bond dimension the generator's purification MPS
-  # needed (chi_mps), plus the certificate and the thermal entropy S = beta(E) + log Z
-  open(joinpath(RES, "state_complexity.csv"), "w") do io
-    println(io, "sample,model,draw,kT,chi_mps,td_mps,entropy")
-    h5open(DATA, "r") do h
-      for name in sort(keys(h["samples"]))
-        a = attributes(h["samples"][name])
-        m = read(a["model"]); m = m isa AbstractString ? m : String(m)
-        S = read(a["beta"]) * read(a["energy_ed"]) + read(a["logZ_ed"])
-        @printf(io, "%s,%s,%d,%.4f,%d,%.4e,%.6f\n", name, m, read(a["draw"]), read(a["kT"]),
-                read(a["chi_mps"]), read(a["td_mps"]), S)
-      end
-    end
-  end
-  println("wrote results/classification_metrics.csv and results/state_complexity.csv")
+  println("wrote results/classification_metrics.csv")
 end
 
 main()
