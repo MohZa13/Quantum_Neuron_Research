@@ -1,0 +1,942 @@
+{
+  "data": "results/spin/xx_xxx_n10.h5",
+  "n": 10,
+  "n_samples": 840,
+  "n_draws": 84,
+  "state_certificate_worst_td_mps": 3.7842566692157284e-07,
+  "folds": 5,
+  "ablation": [
+    {
+      "chi_mpo": 8,
+      "feature_trace_distance": 3.576077168476253,
+      "degenerate_bonds": 13541,
+      "gauge_control": {
+        "tensors/logistic": 0.929875283446712,
+        "tensors/mlp": 0.9643820861678005
+      },
+      "results": [
+        {
+          "feature_set": "tensors",
+          "model": "logistic",
+          "n_features": 2560,
+          "accuracy": 0.8797619047619047,
+          "auc": 0.9399716553287982,
+          "cross_gauge_auc": 0.929875283446712,
+          "per_kT": {
+            "0.1": 0.7976190476190477,
+            "0.13": 0.8809523809523809,
+            "0.18": 0.9166666666666666,
+            "0.25": 0.8928571428571429,
+            "0.35": 0.8928571428571429,
+            "0.5": 0.9047619047619048,
+            "0.71": 0.9047619047619048,
+            "1.0": 0.9047619047619048,
+            "1.41": 0.8928571428571429,
+            "2.0": 0.8095238095238095
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            }
+          ]
+        },
+        {
+          "feature_set": "tensors",
+          "model": "mlp",
+          "n_features": 2560,
+          "accuracy": 0.9369047619047619,
+          "auc": 0.9675878684807256,
+          "cross_gauge_auc": 0.9643820861678005,
+          "per_kT": {
+            "0.1": 0.8571428571428571,
+            "0.13": 0.9285714285714286,
+            "0.18": 0.9523809523809523,
+            "0.25": 0.9523809523809523,
+            "0.35": 0.9404761904761905,
+            "0.5": 0.9285714285714286,
+            "0.71": 0.9523809523809523,
+            "1.0": 0.9761904761904762,
+            "1.41": 0.9404761904761905,
+            "2.0": 0.9404761904761905
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            }
+          ]
+        },
+        {
+          "feature_set": "spectra",
+          "model": "logistic",
+          "n_features": 72,
+          "accuracy": 1.0,
+          "auc": 1.0,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 1.0,
+            "0.13": 1.0,
+            "0.18": 1.0,
+            "0.25": 1.0,
+            "0.35": 1.0,
+            "0.5": 1.0,
+            "0.71": 1.0,
+            "1.0": 1.0,
+            "1.41": 1.0,
+            "2.0": 1.0
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 0.1
+            },
+            {
+              "logisticregression__C": 0.1
+            },
+            {
+              "logisticregression__C": 0.1
+            },
+            {
+              "logisticregression__C": 0.1
+            },
+            {
+              "logisticregression__C": 0.1
+            }
+          ]
+        },
+        {
+          "feature_set": "spectra",
+          "model": "mlp",
+          "n_features": 72,
+          "accuracy": 1.0,
+          "auc": 1.0,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 1.0,
+            "0.13": 1.0,
+            "0.18": 1.0,
+            "0.25": 1.0,
+            "0.35": 1.0,
+            "0.5": 1.0,
+            "0.71": 1.0,
+            "1.0": 1.0,
+            "1.41": 1.0,
+            "2.0": 1.0
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            }
+          ]
+        },
+        {
+          "feature_set": "scalars",
+          "model": "logistic",
+          "n_features": 16,
+          "accuracy": 0.9702380952380952,
+          "auc": 0.9981179138321995,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 0.9880952380952381,
+            "0.13": 0.9642857142857143,
+            "0.18": 0.9761904761904762,
+            "0.25": 0.9761904761904762,
+            "0.35": 0.9880952380952381,
+            "0.5": 0.9642857142857143,
+            "0.71": 0.9523809523809523,
+            "1.0": 0.9523809523809523,
+            "1.41": 0.9642857142857143,
+            "2.0": 0.9761904761904762
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            }
+          ]
+        },
+        {
+          "feature_set": "scalars",
+          "model": "mlp",
+          "n_features": 16,
+          "accuracy": 0.9773809523809524,
+          "auc": 0.9979308390022676,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 0.9880952380952381,
+            "0.13": 0.9761904761904762,
+            "0.18": 0.9761904761904762,
+            "0.25": 0.9761904761904762,
+            "0.35": 0.9880952380952381,
+            "0.5": 0.9880952380952381,
+            "0.71": 0.9642857142857143,
+            "1.0": 0.9642857142857143,
+            "1.41": 0.9761904761904762,
+            "2.0": 0.9761904761904762
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chi_mpo": 16,
+      "feature_trace_distance": 0.40364584051745234,
+      "degenerate_bonds": 19270,
+      "gauge_control": {
+        "tensors/logistic": 0.983078231292517,
+        "tensors/mlp": 0.982267573696145
+      },
+      "results": [
+        {
+          "feature_set": "tensors",
+          "model": "logistic",
+          "n_features": 10240,
+          "accuracy": 0.9404761904761905,
+          "auc": 0.9861507936507936,
+          "cross_gauge_auc": 0.983078231292517,
+          "per_kT": {
+            "0.1": 0.8928571428571429,
+            "0.13": 0.9166666666666666,
+            "0.18": 0.9404761904761905,
+            "0.25": 0.9642857142857143,
+            "0.35": 0.9880952380952381,
+            "0.5": 0.9523809523809523,
+            "0.71": 0.9761904761904762,
+            "1.0": 0.9285714285714286,
+            "1.41": 0.9404761904761905,
+            "2.0": 0.9047619047619048
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            }
+          ]
+        },
+        {
+          "feature_set": "tensors",
+          "model": "mlp",
+          "n_features": 10240,
+          "accuracy": 0.9857142857142858,
+          "auc": 0.9840873015873017,
+          "cross_gauge_auc": 0.982267573696145,
+          "per_kT": {
+            "0.1": 0.9523809523809523,
+            "0.13": 0.9642857142857143,
+            "0.18": 0.9761904761904762,
+            "0.25": 0.9880952380952381,
+            "0.35": 1.0,
+            "0.5": 1.0,
+            "0.71": 0.9880952380952381,
+            "1.0": 0.9880952380952381,
+            "1.41": 1.0,
+            "2.0": 1.0
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            }
+          ]
+        },
+        {
+          "feature_set": "spectra",
+          "model": "logistic",
+          "n_features": 144,
+          "accuracy": 0.9452380952380952,
+          "auc": 1.0,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 1.0,
+            "0.13": 1.0,
+            "0.18": 1.0,
+            "0.25": 1.0,
+            "0.35": 1.0,
+            "0.5": 1.0,
+            "0.71": 1.0,
+            "1.0": 0.9642857142857143,
+            "1.41": 0.8214285714285714,
+            "2.0": 0.6666666666666666
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 0.01
+            },
+            {
+              "logisticregression__C": 0.001
+            },
+            {
+              "logisticregression__C": 0.001
+            },
+            {
+              "logisticregression__C": 0.01
+            },
+            {
+              "logisticregression__C": 0.01
+            }
+          ]
+        },
+        {
+          "feature_set": "spectra",
+          "model": "mlp",
+          "n_features": 144,
+          "accuracy": 1.0,
+          "auc": 1.0,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 1.0,
+            "0.13": 1.0,
+            "0.18": 1.0,
+            "0.25": 1.0,
+            "0.35": 1.0,
+            "0.5": 1.0,
+            "0.71": 1.0,
+            "1.0": 1.0,
+            "1.41": 1.0,
+            "2.0": 1.0
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            }
+          ]
+        },
+        {
+          "feature_set": "scalars",
+          "model": "logistic",
+          "n_features": 16,
+          "accuracy": 0.9666666666666667,
+          "auc": 0.9967403628117915,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 0.9642857142857143,
+            "0.13": 0.9642857142857143,
+            "0.18": 0.9642857142857143,
+            "0.25": 0.9761904761904762,
+            "0.35": 0.9761904761904762,
+            "0.5": 0.9642857142857143,
+            "0.71": 0.9523809523809523,
+            "1.0": 0.9523809523809523,
+            "1.41": 0.9761904761904762,
+            "2.0": 0.9761904761904762
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            }
+          ]
+        },
+        {
+          "feature_set": "scalars",
+          "model": "mlp",
+          "n_features": 16,
+          "accuracy": 0.9571428571428572,
+          "auc": 0.9932766439909297,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 0.9523809523809523,
+            "0.13": 0.9523809523809523,
+            "0.18": 0.9523809523809523,
+            "0.25": 0.9642857142857143,
+            "0.35": 0.9642857142857143,
+            "0.5": 0.9523809523809523,
+            "0.71": 0.9523809523809523,
+            "1.0": 0.9523809523809523,
+            "1.41": 0.9523809523809523,
+            "2.0": 0.9761904761904762
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chi_mpo": 32,
+      "feature_trace_distance": 0.12786732380717766,
+      "degenerate_bonds": 38979,
+      "gauge_control": {
+        "tensors/logistic": 0.939404761904762,
+        "tensors/mlp": 0.977953514739229
+      },
+      "results": [
+        {
+          "feature_set": "tensors",
+          "model": "logistic",
+          "n_features": 40960,
+          "accuracy": 0.8511904761904762,
+          "auc": 0.9457936507936507,
+          "cross_gauge_auc": 0.939404761904762,
+          "per_kT": {
+            "0.1": 0.8214285714285714,
+            "0.13": 0.8095238095238095,
+            "0.18": 0.8571428571428571,
+            "0.25": 0.8690476190476191,
+            "0.35": 0.9166666666666666,
+            "0.5": 0.8333333333333334,
+            "0.71": 0.8452380952380952,
+            "1.0": 0.8690476190476191,
+            "1.41": 0.8571428571428571,
+            "2.0": 0.8333333333333334
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.001
+            }
+          ]
+        },
+        {
+          "feature_set": "tensors",
+          "model": "mlp",
+          "n_features": 40960,
+          "accuracy": 0.986904761904762,
+          "auc": 0.9826558956916099,
+          "cross_gauge_auc": 0.977953514739229,
+          "per_kT": {
+            "0.1": 1.0,
+            "0.13": 0.9880952380952381,
+            "0.18": 0.9761904761904762,
+            "0.25": 0.9761904761904762,
+            "0.35": 0.9642857142857143,
+            "0.5": 0.9761904761904762,
+            "0.71": 0.9880952380952381,
+            "1.0": 1.0,
+            "1.41": 1.0,
+            "2.0": 1.0
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            }
+          ]
+        },
+        {
+          "feature_set": "spectra",
+          "model": "logistic",
+          "n_features": 288,
+          "accuracy": 0.9273809523809524,
+          "auc": 1.0,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 1.0,
+            "0.13": 1.0,
+            "0.18": 1.0,
+            "0.25": 1.0,
+            "0.35": 1.0,
+            "0.5": 1.0,
+            "0.71": 1.0,
+            "1.0": 0.9285714285714286,
+            "1.41": 0.7261904761904762,
+            "2.0": 0.6190476190476191
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 0.001
+            },
+            {
+              "logisticregression__C": 0.001
+            },
+            {
+              "logisticregression__C": 0.001
+            },
+            {
+              "logisticregression__C": 0.01
+            },
+            {
+              "logisticregression__C": 0.01
+            }
+          ]
+        },
+        {
+          "feature_set": "spectra",
+          "model": "mlp",
+          "n_features": 288,
+          "accuracy": 1.0,
+          "auc": 1.0,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 1.0,
+            "0.13": 1.0,
+            "0.18": 1.0,
+            "0.25": 1.0,
+            "0.35": 1.0,
+            "0.5": 1.0,
+            "0.71": 1.0,
+            "1.0": 1.0,
+            "1.41": 1.0,
+            "2.0": 1.0
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            }
+          ]
+        },
+        {
+          "feature_set": "scalars",
+          "model": "logistic",
+          "n_features": 16,
+          "accuracy": 0.969047619047619,
+          "auc": 0.996609977324263,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 0.9642857142857143,
+            "0.13": 0.9761904761904762,
+            "0.18": 0.9761904761904762,
+            "0.25": 0.9761904761904762,
+            "0.35": 0.9761904761904762,
+            "0.5": 0.9642857142857143,
+            "0.71": 0.9523809523809523,
+            "1.0": 0.9523809523809523,
+            "1.41": 0.9761904761904762,
+            "2.0": 0.9761904761904762
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            }
+          ]
+        },
+        {
+          "feature_set": "scalars",
+          "model": "mlp",
+          "n_features": 16,
+          "accuracy": 0.9535714285714286,
+          "auc": 0.9934410430839002,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 0.9404761904761905,
+            "0.13": 0.9404761904761905,
+            "0.18": 0.9523809523809523,
+            "0.25": 0.9523809523809523,
+            "0.35": 0.9642857142857143,
+            "0.5": 0.9523809523809523,
+            "0.71": 0.9523809523809523,
+            "1.0": 0.9523809523809523,
+            "1.41": 0.9523809523809523,
+            "2.0": 0.9761904761904762
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chi_mpo": 64,
+      "feature_trace_distance": 0.01627292132863797,
+      "degenerate_bonds": 84344,
+      "gauge_control": {
+        "tensors/logistic": 0.9177834467120182,
+        "tensors/mlp": 0.9591043083900228
+      },
+      "results": [
+        {
+          "feature_set": "tensors",
+          "model": "logistic",
+          "n_features": 163840,
+          "accuracy": 0.7928571428571428,
+          "auc": 0.9273809523809525,
+          "cross_gauge_auc": 0.9177834467120182,
+          "per_kT": {
+            "0.1": 0.7619047619047619,
+            "0.13": 0.8095238095238095,
+            "0.18": 0.8095238095238095,
+            "0.25": 0.8214285714285714,
+            "0.35": 0.7976190476190477,
+            "0.5": 0.7619047619047619,
+            "0.71": 0.7738095238095238,
+            "1.0": 0.8095238095238095,
+            "1.41": 0.7738095238095238,
+            "2.0": 0.8095238095238095
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            },
+            {
+              "logisticregression__C": 0.0001
+            }
+          ]
+        },
+        {
+          "feature_set": "tensors",
+          "model": "mlp",
+          "n_features": 163840,
+          "accuracy": 0.9809523809523809,
+          "auc": 0.9670096371882085,
+          "cross_gauge_auc": 0.9591043083900228,
+          "per_kT": {
+            "0.1": 0.9404761904761905,
+            "0.13": 0.9642857142857143,
+            "0.18": 0.9880952380952381,
+            "0.25": 0.9880952380952381,
+            "0.35": 1.0,
+            "0.5": 0.9761904761904762,
+            "0.71": 0.9880952380952381,
+            "1.0": 1.0,
+            "1.41": 0.9880952380952381,
+            "2.0": 0.9761904761904762
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            },
+            {
+              "mlpclassifier__alpha": 10.0
+            }
+          ]
+        },
+        {
+          "feature_set": "spectra",
+          "model": "logistic",
+          "n_features": 576,
+          "accuracy": 0.95,
+          "auc": 0.9999943310657596,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 1.0,
+            "0.13": 1.0,
+            "0.18": 1.0,
+            "0.25": 1.0,
+            "0.35": 1.0,
+            "0.5": 1.0,
+            "0.71": 1.0,
+            "1.0": 0.9880952380952381,
+            "1.41": 0.8214285714285714,
+            "2.0": 0.6904761904761905
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 0.001
+            },
+            {
+              "logisticregression__C": 0.001
+            },
+            {
+              "logisticregression__C": 0.01
+            },
+            {
+              "logisticregression__C": 0.01
+            },
+            {
+              "logisticregression__C": 0.1
+            }
+          ]
+        },
+        {
+          "feature_set": "spectra",
+          "model": "mlp",
+          "n_features": 576,
+          "accuracy": 1.0,
+          "auc": 1.0,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 1.0,
+            "0.13": 1.0,
+            "0.18": 1.0,
+            "0.25": 1.0,
+            "0.35": 1.0,
+            "0.5": 1.0,
+            "0.71": 1.0,
+            "1.0": 1.0,
+            "1.41": 1.0,
+            "2.0": 1.0
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 0.1
+            }
+          ]
+        },
+        {
+          "feature_set": "scalars",
+          "model": "logistic",
+          "n_features": 16,
+          "accuracy": 0.9702380952380952,
+          "auc": 0.996609977324263,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 0.9761904761904762,
+            "0.13": 0.9761904761904762,
+            "0.18": 0.9761904761904762,
+            "0.25": 0.9761904761904762,
+            "0.35": 0.9761904761904762,
+            "0.5": 0.9642857142857143,
+            "0.71": 0.9523809523809523,
+            "1.0": 0.9523809523809523,
+            "1.41": 0.9761904761904762,
+            "2.0": 0.9761904761904762
+          },
+          "hyperparams_per_fold": [
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            },
+            {
+              "logisticregression__C": 1.0
+            }
+          ]
+        },
+        {
+          "feature_set": "scalars",
+          "model": "mlp",
+          "n_features": 16,
+          "accuracy": 0.9535714285714286,
+          "auc": 0.9933956916099773,
+          "cross_gauge_auc": null,
+          "per_kT": {
+            "0.1": 0.9404761904761905,
+            "0.13": 0.9404761904761905,
+            "0.18": 0.9523809523809523,
+            "0.25": 0.9523809523809523,
+            "0.35": 0.9642857142857143,
+            "0.5": 0.9523809523809523,
+            "0.71": 0.9523809523809523,
+            "1.0": 0.9523809523809523,
+            "1.41": 0.9523809523809523,
+            "2.0": 0.9761904761904762
+          },
+          "hyperparams_per_fold": [
+            {
+              "mlpclassifier__alpha": 0.1
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            },
+            {
+              "mlpclassifier__alpha": 1.0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
